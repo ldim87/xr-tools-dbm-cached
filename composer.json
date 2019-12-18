@@ -1,0 +1,24 @@
+{
+  "name": "1kmenu/dbm-cached",
+  "description": "Adapter for \\XrTools\\DatabaseManager Interface (Proxy with caching)",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Dmitriy Lukin",
+      "email": "lukin.d87@gmail.com"
+    }
+  ],
+  "minimum-stability": "dev",
+  "require": {
+    "1kmenu/database-manager": "@dev",
+    "1kmenu/cache-manager": "@dev",
+    "ext-pdo": "*",
+    "ext-memcached": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "XrTools\\": "src"
+    }
+  }
+}
