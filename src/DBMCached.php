@@ -56,7 +56,32 @@ class DBMCached implements DatabaseManager {
 	}
 
 	public function query(string $query, array $params = null, array $opt = []){
-		return $this->databaseManager->query($query, $params, $opt);
+
+		// prepare result array
+		$result = [
+			'status' => false,
+			'message' => __METHOD__ . ': ' . $query . '; ',
+			'affected' => 0
+		];
+		
+		// Executing the request SQL
+		try{
+			$result_query = $this->databaseManager->query($query, $params, $opt);
+
+			$result['insert_id'] = is_bool($result_query) ? null : $result_query;
+			$result['affected'] = $this->databaseManager->getAffectedRows();
+			$result['status'] = true;
+			$result['result_query'] = $result_query;
+		}catch(\Exception $e){
+			$result['message'] .= $e->getMessage();
+			$result['errcode'] = $e->getCode();
+		}
+
+		// :TODO: 
+		// mysql_do (regex пройти код и поправить все места где $params = false и переписывать на mysql_do($query, null, ['return' => 'result_query']))
+		
+		return !empty($opt['return']) ? ($result[$opt['return']] ?? null) : $result;
+
 	}
 	
 	public function connect(array $settings){
