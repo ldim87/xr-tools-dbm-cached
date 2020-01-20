@@ -137,6 +137,10 @@ class DBMCached implements DatabaseManager {
 		$this->queryCollector[] = $this->getQueryDebugInfo($query, $params);
 	}
 
+	public function isCollectingQueries(){
+		return $this->isCollectingQueries;
+	}
+
 	/**
 	 * [getQueryCollection description]
 	 * @return [type] [description]
