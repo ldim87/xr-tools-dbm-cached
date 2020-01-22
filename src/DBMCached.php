@@ -55,14 +55,28 @@ class DBMCached implements DatabaseManager {
 		$this->setOptions($opt);		
 	}
 
+	/**
+	 * [query description]
+	 * @param  string     $query  [description]
+	 * @param  array|null $params [description]
+	 * @param  array      $opt    [description]
+	 * @return [type]             [description]
+	 */
 	public function query(string $query, array $params = null, array $opt = []){
 
 		// prepare result array
 		$result = [
 			'status' => false,
-			'message' => __METHOD__ . ': ' . $query . '; ',
-			'affected' => 0
+			'message' => '',
+			'affected' => null
 		];
+
+		// debug mode
+		$debug = !empty($opt['debug']);
+
+		if($debug){
+			$this->debugMessage($this->getQueryDebugInfo($query, $params), __METHOD__);
+		}
 		
 		// Executing the request SQL
 		try{
@@ -72,22 +86,36 @@ class DBMCached implements DatabaseManager {
 			$result['affected'] = $this->databaseManager->getAffectedRows();
 			$result['status'] = true;
 			$result['result_query'] = $result_query;
-		}catch(\Exception $e){
-			$result['message'] .= $e->getMessage();
+		}
+		catch(\Exception $e){
+
+			$result['message'] = $e->getMessage();
 			$result['errcode'] = $e->getCode();
+
+			if($debug){
+				$this->debugMessage($result['message'], __METHOD__);
+			}
 		}
 
-		// :TODO: 
+		// :TODO:REFACTOR:
 		// mysql_do (regex пройти код и поправить все места где $params = false и переписывать на mysql_do($query, null, ['return' => 'result_query']))
 		
 		return !empty($opt['return']) ? ($result[$opt['return']] ?? null) : $result;
-
 	}
 	
+	/**
+	 * [connect description]
+	 * @param  array  $settings [description]
+	 * @return [type]           [description]
+	 */
 	public function connect(array $settings){
 		return $this->databaseManager->connect($settings);
 	}
 
+	/**
+	 * [setOptions description]
+	 * @param array $opt [description]
+	 */
 	public function setOptions(array $opt){
 		// collect all queries to $queryCollector
 		if(isset($opt['collect_queries'])){
@@ -104,14 +132,6 @@ class DBMCached implements DatabaseManager {
 	private function debugMessage(string $str, string $method){
 		// fill message array
 		$this->debugMessages[] = $method . ': ' . $str;
-	}
-
-	/**
-	 * [clearDebugMessages description]
-	 * @return [type] [description]
-	 */
-	private function clearDebugMessages(){
-		$this->debugMessages = [];
 	}
 
 	/**
@@ -137,6 +157,10 @@ class DBMCached implements DatabaseManager {
 		$this->queryCollector[] = $this->getQueryDebugInfo($query, $params);
 	}
 
+	/**
+	 * [isCollectingQueries description]
+	 * @return boolean [description]
+	 */
 	public function isCollectingQueries(){
 		return $this->isCollectingQueries;
 	}
@@ -155,12 +179,12 @@ class DBMCached implements DatabaseManager {
 	 * @param  array|null $params [description]
 	 * @return [type]             [description]
 	 */
-	private function getQueryDebugInfo(string $query, array $params = null){
+	protected function getQueryDebugInfo(string $query, array $params = null){
 		// set message info
-		$message = "Query:\n" . $query;
+		$message = 'Query:<br><br>' . $query;
 
 		if(isset($params)){
-			$message .= "\nBound values:\n" . '<pre>' . print_r($params, true) . '</pre>';
+			$message .= '<br><br>Bound values:<br><pre>' . htmlspecialchars(print_r($params, true), ENT_QUOTES) . '</pre>';
 		}
 		
 		return $message;
@@ -183,7 +207,6 @@ class DBMCached implements DatabaseManager {
 		$debug = !empty($opt['debug']);
 
 		if($debug){
-			$this->clearDebugMessages();
 			$this->debugMessage($this->getQueryDebugInfo($query, $params), __METHOD__);
 		}
 
@@ -339,92 +362,113 @@ class DBMCached implements DatabaseManager {
 			}
 		}
 
-		//
-		// if cache not found or only part is present, query the database
-		//
-		$result = $this->databaseManager->fetchArray($query, $params);
 
-		// log query
-		$this->collectQuery($query, $params);
-		
+		try {
 
-		// cache helper array for collecting missing cache items to save
-		if($result && $cache_mode == 1){
+			//
+			// if cache not found or only part is present, query the database
+			//
+
+			$result = $this->databaseManager->fetchArray($query, $params);
+
+			// log query
+			$this->collectQuery($query, $params);
 			
-			// result can be grouped by selected column
-			if(!empty($opt['cache_bycol_group'])){
+
+			// cache helper array for collecting missing cache items to save
+			if($result && $cache_mode == 1){
 				
-				// group data
-				$db_data = $this->groupArrayByKey($result, $cache_by_column, $opt['cache_bycol_group'], [
-					'direct_value' => !empty($opt['cache_bycol_group_value'])
-				]);
-				
-				// result array needs to be replaced because cache data are also already grouped
-				$result = $db_data;
-			}
-			// renaming keys for convinient array searching
-			else {
-				$db_data = $this->indexArrayByKey($result, $cache_by_column);
-			}
-		} else {
-			$db_data = [];
-		}
-
-		// add found cached items to final result
-		if(!empty($found_in_cache)){
-
-			if($debug){
-				$this->debugMessage('Loaded from cache: ' . "\n" . '<pre>' . print_r($found_in_cache, true) . '</pre>', __METHOD__);
-			}
-
-			foreach ($found_in_cache as $key => $val){
-				// group data
-				if(empty($opt['cache_bycol_group'])){
-					$result[] = $val;
+				// result can be grouped by selected column
+				if(!empty($opt['cache_bycol_group'])){
+					
+					// group data
+					$db_data = $this->groupArrayByKey($result, $cache_by_column, $opt['cache_bycol_group'], [
+						'direct_value' => !empty($opt['cache_bycol_group_value'])
+					]);
+					
+					// result array needs to be replaced because cache data are also already grouped
+					$result = $db_data;
 				}
-				// without grouping
+				// renaming keys for convinient array searching
 				else {
-					$result[$key] = $val;
+					$db_data = $this->indexArrayByKey($result, $cache_by_column);
 				}
+			} else {
+				$db_data = [];
 			}
-		}
 
-		// allow array indexing (confilcts with data grouping)
-		if(!empty($opt['arr_index']) && empty($opt['cache_bycol_group'])){
-			$result = $this->indexArrayByKey($result, $opt['arr_index']);
-		}
+			// add found cached items to final result
+			if(!empty($found_in_cache)){
 
-		// collect items for saving to cache		
-		$to_cache = [];
-
-		// collect missing cache items found in database
-		if($cache_mode == 1){
-			foreach ($db_check as $val){
-
-				// get cache key
-				$mc_key = $mc_keys[$val];
-				
-				// skip invalid items
-				if(!isset($db_data[$val]) || $db_data[$val] === false){
-					continue;
+				if($debug){
+					$this->debugMessage('Loaded from cache: ' . "\n" . '<pre>' . print_r($found_in_cache, true) . '</pre>', __METHOD__);
 				}
 
-				$to_cache[$mc_key] = $db_data[$val];
+				foreach ($found_in_cache as $key => $val){
+					// group data
+					if(empty($opt['cache_bycol_group'])){
+						$result[] = $val;
+					}
+					// without grouping
+					else {
+						$result[$key] = $val;
+					}
+				}
 			}
-		}
-		// collect whole list to cache
-		elseif($cache_mode == 2 && $result !== false){
-			$to_cache[$opt['cache_key']] = $result;
-		}
 
-		// if there is anything to save in cache
-		if($to_cache){
+			// allow array indexing (confilcts with data grouping)
+			if(!empty($opt['arr_index']) && empty($opt['cache_bycol_group'])){
+				$result = $this->indexArrayByKey($result, $opt['arr_index']);
+			}
+
+			// collect items for saving to cache		
+			$to_cache = [];
+
+			// collect missing cache items found in database
+			if($cache_mode == 1){
+				foreach ($db_check as $val){
+
+					// get cache key
+					$mc_key = $mc_keys[$val];
+					
+					// skip invalid items
+					if(!isset($db_data[$val]) || $db_data[$val] === false){
+						continue;
+					}
+
+					$to_cache[$mc_key] = $db_data[$val];
+				}
+			}
+			// collect whole list to cache
+			elseif($cache_mode == 2 && $result !== false){
+				$to_cache[$opt['cache_key']] = $result;
+			}
+
+			// if there is anything to save in cache
+			if($to_cache){
+				if($debug){
+					$this->debugMessage('Saving in cache: ' . "\n" . '<pre>' . print_r($to_cache, true) . '</pre>', __METHOD__);
+				}
+
+				$this->cacheManager->setMulti($to_cache, $cache_time, true);
+			}
+			
+		} catch (\Exception $e) {
+			
+			$result = [
+				'status' => false,
+				'message' => $e->getMessage(),
+				'errcode' => $e->getCode()
+			];
+
 			if($debug){
-				$this->debugMessage('Saving in cache: ' . "\n" . '<pre>' . print_r($to_cache, true) . '</pre>', __METHOD__);
+				$this->debugMessage($result['message'], __METHOD__);
 			}
 
-			$this->cacheManager->setMulti($to_cache, $cache_time, true);
 		}
+
+
+			
 	
 		return $result;
 	}
@@ -445,7 +489,6 @@ class DBMCached implements DatabaseManager {
 		$use_cache = !empty($opt['cache']) && !empty($opt['cache_key']);
 
 		if($debug){
-			$this->clearDebugMessages();
 			$this->debugMessage($this->getQueryDebugInfo($query, $params), __METHOD__);
 		}
 		
@@ -467,26 +510,44 @@ class DBMCached implements DatabaseManager {
 				return $cached;
 			}
 		}
-		
-		// get result
-		$result = $this->databaseManager->fetchColumn($query, $params);
 
-		// log query
-		$this->collectQuery($query, $params);
-				
-		if($use_cache){
 
-			$cache_time = $opt['cache_time'] ?? null;
+		try {
+			// get result
+			$result = $this->databaseManager->fetchColumn($query, $params);
 
-			$this->cacheManager->set($opt['cache_key'], $result, $cache_time);
+			// log query
+			$this->collectQuery($query, $params);
+					
+			if($use_cache){
+
+				$cache_time = $opt['cache_time'] ?? null;
+
+				$this->cacheManager->set($opt['cache_key'], $result, $cache_time);
+
+				if($debug){
+					$this->debugMessage(
+						'Saving cache via key "' . $opt['cache_key'] . '"'. "\nValue:\n" . '<pre>'.print_r($result, true).'</pre>',
+						__METHOD__
+					);
+				}
+			}
+		} catch (\Exception $e) {
+			
+			$result = [
+				'status' => false,
+				'message' => $e->getMessage(),
+				'errcode' => $e->getCode()
+			];
 
 			if($debug){
-				$this->debugMessage(
-					'Saving cache via key "' . $opt['cache_key'] . '"'. "\nValue:\n" . '<pre>'.print_r($result, true).'</pre>',
-					__METHOD__
-				);
+				$this->debugMessage($result['message'], __METHOD__);
 			}
+
 		}
+
+		
+		
 			
 		return $result;
 	}
@@ -507,7 +568,6 @@ class DBMCached implements DatabaseManager {
 		$use_cache = !empty($opt['cache']) && !empty($opt['cache_key']);
 
 		if($debug){
-			$this->clearDebugMessages();
 			$this->debugMessage($this->getQueryDebugInfo($query, $params), __METHOD__);
 		}
 		
@@ -530,25 +590,40 @@ class DBMCached implements DatabaseManager {
 			}
 		}
 		
-		// get result
-		$result = $this->databaseManager->fetchRow($query, $params);
+		try {
+			// get result
+			$result = $this->databaseManager->fetchRow($query, $params);
 
-		// log query
-		$this->collectQuery($query, $params);
-				
-		if($use_cache){
+			// log query
+			$this->collectQuery($query, $params);
+					
+			if($use_cache){
 
-			$cache_time = $opt['cache_time'] ?? null;
+				$cache_time = $opt['cache_time'] ?? null;
 
-			$this->cacheManager->set($opt['cache_key'], $result, $cache_time, true);
+				$this->cacheManager->set($opt['cache_key'], $result, $cache_time, true);
 
-			if($debug){
-				$this->debugMessage(
-					'Saving cache via key "' . $opt['cache_key'] . '"'. "\nValue:\n" . '<pre>'.print_r($result, true).'</pre>',
-					__METHOD__
-				);
+				if($debug){
+					$this->debugMessage(
+						'Saving cache via key "' . $opt['cache_key'] . '"'. "\nValue:\n" . '<pre>'.print_r($result, true).'</pre>',
+						__METHOD__
+					);
+				}
 			}
 		}
+		catch (\Exception $e) {
+			
+			$result = [
+				'status' => false,
+				'message' => $e->getMessage(),
+				'errcode' => $e->getCode()
+			];
+
+			if($debug){
+				$this->debugMessage($result['message'], __METHOD__);
+			}
+		}
+			
 			
 		return $result;
 	}
@@ -682,5 +757,4 @@ class DBMCached implements DatabaseManager {
 
 		return $result;
 	}
-
 }
