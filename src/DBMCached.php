@@ -362,18 +362,17 @@ class DBMCached implements DatabaseManager {
 			}
 		}
 
+		//
+		// if cache not found or only part is present, query the database
+		//
 
 		try {
-
-			//
-			// if cache not found or only part is present, query the database
-			//
-
-			$result = $this->databaseManager->fetchArray($query, $params);
 
 			// log query
 			$this->collectQuery($query, $params);
 			
+			// get result
+			$result = $this->databaseManager->fetchArray($query, $params);
 
 			// cache helper array for collecting missing cache items to save
 			if($result && $cache_mode == 1){
@@ -513,12 +512,13 @@ class DBMCached implements DatabaseManager {
 
 
 		try {
-			// get result
-			$result = $this->databaseManager->fetchColumn($query, $params);
 
 			// log query
 			$this->collectQuery($query, $params);
-					
+
+			// get result
+			$result = $this->databaseManager->fetchColumn($query, $params);
+
 			if($use_cache){
 
 				$cache_time = $opt['cache_time'] ?? null;
@@ -591,12 +591,13 @@ class DBMCached implements DatabaseManager {
 		}
 		
 		try {
-			// get result
-			$result = $this->databaseManager->fetchRow($query, $params);
 
 			// log query
 			$this->collectQuery($query, $params);
-					
+
+			// get result
+			$result = $this->databaseManager->fetchRow($query, $params);
+
 			if($use_cache){
 
 				$cache_time = $opt['cache_time'] ?? null;
