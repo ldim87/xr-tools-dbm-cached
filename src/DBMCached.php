@@ -868,6 +868,44 @@ class DBMCached implements DatabaseManager {
 		return !empty($sys['return_status']) ? $result['status'] : $result;
 	}
 	
+	/**
+	 * MySQL transaction start
+	 */
+	public function start()
+	{
+		$this->databaseManager->start();
+	}
 	
+	/**
+	 * MySQL transaction rollback
+	 */
+	public function rollback()
+	{
+		$this->databaseManager->rollBack();
+	}
+	
+	/**
+	 * MySQL transaction commit
+	 *
+	 * @param array $opt
+	 *
+	 * @return bool status implementations
+	 */
+	public function commit(array $opt=[])
+	{
+		try{
+			$this->databaseManager->commit();
+			return true;
+		}catch(\Exception $e){
+			
+			$this->debugMessage('ErrorsSQLServer: Request execution error during transaction session!', __METHOD__);
+			
+			if(!empty($opt['debug'])){
+				$this->debugMessage($e, __METHOD__);
+			}
+			
+			return false;
+		}
+	}
 	
 }
