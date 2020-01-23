@@ -54,13 +54,15 @@ class DBMCached implements DatabaseManager {
 		// set options
 		$this->setOptions($opt);		
 	}
-
+	
 	/**
 	 * [query description]
-	 * @param  string     $query  [description]
-	 * @param  array|null $params [description]
-	 * @param  array      $opt    [description]
-	 * @return [type]             [description]
+	 *
+	 * @param string     $query  [description]
+	 * @param array|null $params [description]
+	 * @param array      $opt    [description]
+	 *
+	 * @return null|array|mixed [description]
 	 */
 	public function query(string $query, array $params = null, array $opt = []){
 
@@ -97,9 +99,6 @@ class DBMCached implements DatabaseManager {
 			}
 		}
 
-		// :TODO:REFACTOR:
-		// mysql_do (regex пройти код и поправить все места где $params = false и переписывать на mysql_do($query, null, ['return' => 'result_query']))
-		
 		return !empty($opt['return']) ? ($result[$opt['return']] ?? null) : $result;
 	}
 	
@@ -798,4 +797,74 @@ class DBMCached implements DatabaseManager {
 
 		return $result;
 	}
+	
+	/**
+	 * Insert/edit elements id DB
+	 *
+	 * @param  array   $data       SQL parameters array in format [column_name => value, …]
+	 * @param  string  $table_name Destination table name
+	 * @param  integer $index      UPDATE query WHERE $sys['index_key'] = $index (index_key is "id" by default)
+	 * @param  array   $sys        Settings:
+	 *                            			<ul>
+	 *                            				<li> <strong> debug </strong> bool (false)
+	 *                            					- Debug mode
+	 *                            				<li> <strong> where </strong> string ("")
+	 *                            					- Manual WHERE string ($index has higher priority so it must be set to 0)
+	 *                            				<li> <strong> where_vals </strong> array ([])
+	 *                            					- Values for $sys['where']
+	 *                            				<li> <strong> index_key </strong> string ("id")
+	 *                            					 - Index key name
+	 *                            			</ul>
+	 *
+	 * @return array              Result status array returned by mysql_do()
+	 */
+	public function set(array $data, string $table_name, int $index = 0, array $sys = []){
+		// empty data |or  empty table name
+		if(!$data || !$table_name){
+			return array('status' => false, 'message' => 'empty input');
+		}
+		
+		$debug = !empty($sys['debug']);
+		
+		// create sql query
+		$sql = '';
+		$vals = array();
+		
+		// manual WHERE ($index priority)
+		$where = $sys['where'] ?? '';
+		$where_vals = !empty($sys['where_vals']) && is_array($sys['where_vals']) ? $sys['where_vals'] : array();
+		
+		foreach ($data as $key => $value) {
+			// add to query
+			if($sql) $sql .= ', ';
+			
+			$sql .= '`'.$key.'`=?';
+			$vals[] = $value;
+		}
+		
+		// Update by index_key (id)
+		if($index){
+			$index_key = $sys['index_key'] ?? 'id';
+			$where = 'WHERE `'.$index_key.'`=?';
+			
+			$vals[] = $index;
+		}
+		// Update through manual WHERE
+		elseif($where && $where_vals){
+			foreach ($where_vals as $key => $val){
+				$vals[$key] = $val;
+			}
+		}
+		
+		$result = mysql_do(
+			($where ? 'UPDATE' : 'INSERT') . " `{$table_name}` SET {$sql} {$where}",
+			$vals,
+			array('debug' => $debug)
+		);
+		
+		return !empty($sys['return_status']) ? $result['status'] : $result;
+	}
+	
+	
+	
 }
