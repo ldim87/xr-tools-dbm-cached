@@ -471,7 +471,47 @@ class DBMCached implements DatabaseManager {
 	
 		return $result;
 	}
+	
+	/**
+	 * Getting data and the number of all rows
+	 * ps. DISTINCT() not yet provided
+	 *
+	 * @param string $query
+	 * @param array  $params
+	 * @param array  $opt
+	 *
+	 * @return array|mixed
 
+	 */
+	public function fetchArrayWithCount(string $query, array $params = null, array $opt = []){
+		$is_cache = !empty($opt['cache']) && !empty($opt['cache_key']);
+		
+		// If it is cache - return
+		if($is_cache && ($result = $this->cacheManager->get($opt['cache_key'], true))){
+			return $result;
+		}
+		
+		try{
+			$result_fetchArr = $this->databaseManager->fetchArrayWithCount($query, $params, $opt);
+		}catch(\Exception $e){
+			if(!empty($opt['debug'])){
+				$this->debugMessage('Error in class DBMysqlAdapter:: '. $e.'<br>'.
+					$this->getQueryDebugInfo($query, $params),
+					__METHOD__
+				);
+			}
+			
+			return false;
+		}
+		
+		// Cache
+		if($is_cache){
+			$this->cacheManager->set($opt['cache_key'], $result_fetchArr, $opt['cache_time'] ?? null, true);
+		}
+		
+		return $result_fetchArr;
+	}
+	
 	/**
 	 * [fetchColumn description]
 	 * @param  string     $query  [description]
