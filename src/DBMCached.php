@@ -87,7 +87,7 @@ class DBMCached implements DatabaseManager {
 			$result['insert_id'] = is_bool($result_query) ? null : $result_query;
 			$result['affected'] = $this->databaseManager->getAffectedRows();
 			$result['status'] = true;
-			$result['result_query'] = $result_query;
+			$result['status_or_insert_id'] = $result_query;
 		}
 		catch(\Exception $e){
 
@@ -856,10 +856,13 @@ class DBMCached implements DatabaseManager {
 			}
 		}
 		
-		$result = mysql_do(
+		$result = $this->query(
 			($where ? 'UPDATE' : 'INSERT') . " `{$table_name}` SET {$sql} {$where}",
 			$vals,
-			array('debug' => $debug)
+			array(
+				'debug' => $debug,
+				'return' =>!empty($sys['status_or_insert_id']) ? 'status_or_insert_id' : null
+				)
 		);
 		
 		return !empty($sys['return_status']) ? $result['status'] : $result;
