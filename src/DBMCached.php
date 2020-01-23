@@ -82,12 +82,12 @@ class DBMCached implements DatabaseManager {
 		
 		// Executing the request SQL
 		try{
-			$result_query = $this->databaseManager->query($query, $params, $opt);
+			$status_or_insert_id = $this->databaseManager->query($query, $params, $opt);
 
-			$result['insert_id'] = is_bool($result_query) ? null : $result_query;
+			$result['insert_id'] = is_bool($status_or_insert_id) ? null : $status_or_insert_id;
 			$result['affected'] = $this->databaseManager->getAffectedRows();
 			$result['status'] = true;
-			$result['status_or_insert_id'] = $result_query;
+			$result['status_or_insert_id'] = $status_or_insert_id;
 		}
 		catch(\Exception $e){
 
@@ -483,32 +483,61 @@ class DBMCached implements DatabaseManager {
 
 	 */
 	public function fetchArrayWithCount(string $query, array $params = null, array $opt = []){
-		$is_cache = !empty($opt['cache']) && !empty($opt['cache_key']);
 		
-		// If it is cache - return
-		if($is_cache && ($result = $this->cacheManager->get($opt['cache_key'], true))){
-			return $result;
+		$cache = !empty($opt['cache']) && !empty($opt['cache_key']);
+		$debug = !empty($opt['debug']);
+
+		if($debug){
+			$this->debugMessage($this->getQueryDebugInfo($query, $params), __METHOD__);
 		}
 		
-		try{
-			$result_fetchArr = $this->databaseManager->fetchArrayWithCount($query, $params, $opt);
-		}catch(\Exception $e){
-			if(!empty($opt['debug'])){
-				$this->debugMessage('Error in class DBMysqlAdapter:: '. $e.'<br>'.
-					$this->getQueryDebugInfo($query, $params),
-					__METHOD__
-				);
+		// get cache
+		if($cache){
+
+			$result = $this->cacheManager->get($opt['cache_key'], true);
+
+			if($result !== false){
+
+				if($debug){
+					$this->debugMessage(
+						'Cached result found via key "' . $opt['cache_key'] . '". Skipping query...' . "\n",
+						__METHOD__
+					);
+				}
+
+				return $result;
+			}
+		}
+		
+		try {
+			// log query
+			$this->collectQuery($query, $params);
+
+			$result = $this->databaseManager->fetchArrayWithCount($query, $params);
+		}
+		catch(\Exception $e){
+
+			if($debug){
+				$this->debugMessage($e->getMessage(), __METHOD__);
 			}
 			
 			return false;
 		}
-		
-		// Cache
-		if($is_cache){
-			$this->cacheManager->set($opt['cache_key'], $result_fetchArr, $opt['cache_time'] ?? null, true);
+
+		// set cache
+		if($cache){
+
+			if($debug){
+				$this->debugMessage(
+					'Saving cache via key "' . $opt['cache_key'] . '"'. "\nValue:\n" . '<pre>'.print_r($result, true).'</pre>',
+					__METHOD__
+				);
+			}
+
+			$this->cacheManager->set($opt['cache_key'], $result, $opt['cache_time'] ?? null, true);
 		}
 		
-		return $result_fetchArr;
+		return $result;
 	}
 	
 	/**
@@ -803,36 +832,36 @@ class DBMCached implements DatabaseManager {
 	 *
 	 * @param  array   $data       SQL parameters array in format [column_name => value, …]
 	 * @param  string  $table_name Destination table name
-	 * @param  integer $index      UPDATE query WHERE $sys['index_key'] = $index (index_key is "id" by default)
-	 * @param  array   $sys        Settings:
+	 * @param  integer $index      UPDATE query WHERE $opt['index_key'] = $index (index_key is "id" by default)
+	 * @param  array   $opt        Settings:
 	 *                            			<ul>
 	 *                            				<li> <strong> debug </strong> bool (false)
 	 *                            					- Debug mode
 	 *                            				<li> <strong> where </strong> string ("")
 	 *                            					- Manual WHERE string ($index has higher priority so it must be set to 0)
 	 *                            				<li> <strong> where_vals </strong> array ([])
-	 *                            					- Values for $sys['where']
+	 *                            					- Values for $opt['where']
 	 *                            				<li> <strong> index_key </strong> string ("id")
 	 *                            					 - Index key name
 	 *                            			</ul>
 	 *
 	 * @return array              Result status array returned by mysql_do()
 	 */
-	public function set(array $data, string $table_name, int $index = 0, array $sys = []){
+	public function set(array $data, string $table_name, $index = null, array $opt = []){
 		// empty data |or  empty table name
-		if(!$data || !$table_name){
-			return array('status' => false, 'message' => 'empty input');
+		if(!$data || !strlen($table_name)){
+			return ['status' => false, 'message' => 'Empty input'];
 		}
 		
-		$debug = !empty($sys['debug']);
+		$debug = !empty($opt['debug']);
 		
 		// create sql query
 		$sql = '';
-		$vals = array();
+		$vals = [];
 		
 		// manual WHERE ($index priority)
-		$where = $sys['where'] ?? '';
-		$where_vals = !empty($sys['where_vals']) && is_array($sys['where_vals']) ? $sys['where_vals'] : array();
+		$where = $opt['where'] ?? '';
+		$where_vals = !empty($opt['where_vals']) && is_array($opt['where_vals']) ? $opt['where_vals'] : [];
 		
 		foreach ($data as $key => $value) {
 			// add to query
@@ -844,7 +873,7 @@ class DBMCached implements DatabaseManager {
 		
 		// Update by index_key (id)
 		if($index){
-			$index_key = $sys['index_key'] ?? 'id';
+			$index_key = $opt['index_key'] ?? 'id';
 			$where = 'WHERE `'.$index_key.'`=?';
 			
 			$vals[] = $index;
@@ -856,16 +885,14 @@ class DBMCached implements DatabaseManager {
 			}
 		}
 		
-		$result = $this->query(
+		return $this->query(
 			($where ? 'UPDATE' : 'INSERT') . " `{$table_name}` SET {$sql} {$where}",
 			$vals,
 			array(
 				'debug' => $debug,
-				'return' =>!empty($sys['status_or_insert_id']) ? 'status_or_insert_id' : null
-				)
+				'return' => $opt['return'] ?? null
+			)
 		);
-		
-		return !empty($sys['return_status']) ? $result['status'] : $result;
 	}
 	
 	/**
@@ -895,17 +922,16 @@ class DBMCached implements DatabaseManager {
 	{
 		try{
 			$this->databaseManager->commit();
-			return true;
-		}catch(\Exception $e){
 			
-			$this->debugMessage('ErrorsSQLServer: Request execution error during transaction session!', __METHOD__);
+			return true;
+		}
+		catch(\Exception $e){
 			
 			if(!empty($opt['debug'])){
-				$this->debugMessage($e, __METHOD__);
+				$this->debugMessage($e->getMessage(), __METHOD__);
 			}
 			
 			return false;
 		}
 	}
-	
 }
