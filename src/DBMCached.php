@@ -453,14 +453,10 @@ class DBMCached implements DatabaseManager {
 			
 		} catch (\Exception $e) {
 			
-			$result = [
-				'status' => false,
-				'message' => $e->getMessage(),
-				'errcode' => $e->getCode()
-			];
+			$result = false;
 
 			if($debug){
-				$this->debugMessage($result['message'], __METHOD__);
+				$this->debugMessage($e->getMessage(), __METHOD__);
 			}
 
 		}
@@ -602,14 +598,10 @@ class DBMCached implements DatabaseManager {
 			}
 		} catch (\Exception $e) {
 			
-			$result = [
-				'status' => false,
-				'message' => $e->getMessage(),
-				'errcode' => $e->getCode()
-			];
+			$result = false;
 
 			if($debug){
-				$this->debugMessage($result['message'], __METHOD__);
+				$this->debugMessage($e->getMessage(), __METHOD__);
 			}
 
 		}
@@ -682,14 +674,10 @@ class DBMCached implements DatabaseManager {
 		}
 		catch (\Exception $e) {
 			
-			$result = [
-				'status' => false,
-				'message' => $e->getMessage(),
-				'errcode' => $e->getCode()
-			];
+			$result = false;
 
 			if($debug){
-				$this->debugMessage($result['message'], __METHOD__);
+				$this->debugMessage($e->getMessage(), __METHOD__);
 			}
 		}
 			
@@ -881,7 +869,7 @@ class DBMCached implements DatabaseManager {
 		// Update through manual WHERE
 		elseif($where && $where_vals){
 			foreach ($where_vals as $key => $val){
-				$vals[$key] = $val;
+				$vals[] = $val;
 			}
 		}
 		
