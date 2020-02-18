@@ -14,31 +14,31 @@ class DBMCached implements DatabaseManager {
 	 * [$databaseManager description]
 	 * @var DatabaseManager
 	 */
-	private $databaseManager;
+	protected $databaseManager;
 
 	/**
 	 * [$cacheManager description]
 	 * @var CacheManager
 	 */
-	private $cacheManager;
+	protected $cacheManager;
 
 	/**
 	 * [$isCollectingQueries description]
 	 * @var boolean
 	 */
-	private $isCollectingQueries = false;
+	protected $isCollectingQueries = false;
 
 	/**
 	 * [$queryCollector description]
 	 * @var array
 	 */
-	private $queryCollector = [];
+	protected $queryCollector = [];
 	
 	/**
 	 * [$debugMessages description]
 	 * @var array
 	 */
-	private $debugMessages = [];
+	protected $debugMessages = [];
 
 	/**
 	 * [__construct description]
@@ -53,6 +53,10 @@ class DBMCached implements DatabaseManager {
 
 		// set options
 		$this->setOptions($opt);		
+	}
+
+	public function getAffectedRows(){
+		return $this->databaseManager->getAffectedRows();
 	}
 	
 	/**
@@ -81,7 +85,11 @@ class DBMCached implements DatabaseManager {
 		}
 		
 		// Executing the request SQL
-		try{
+		try {
+
+			// log query
+			$this->collectQuery($query, $params);
+
 			$status_or_insert_id = $this->databaseManager->query($query, $params, $opt);
 
 			$result['insert_id'] = is_bool($status_or_insert_id) ? null : $status_or_insert_id;
@@ -107,7 +115,7 @@ class DBMCached implements DatabaseManager {
 	 * @param  array  $settings [description]
 	 * @return [type]           [description]
 	 */
-	public function connect(array $settings){
+	protected function connect(array $settings){
 		return $this->databaseManager->connect($settings);
 	}
 
@@ -115,11 +123,15 @@ class DBMCached implements DatabaseManager {
 	 * [setOptions description]
 	 * @param array $opt [description]
 	 */
-	public function setOptions(array $opt){
+	protected function setOptions(array $opt){
 		// collect all queries to $queryCollector
 		if(isset($opt['collect_queries'])){
 			$this->isCollectingQueries = !empty($opt['collect_queries']);
 		}
+	}
+
+	public function setConnectionParams(array $settings){
+		$this->databaseManager->setConnectionParams($settings);
 	}
 
 	/**
@@ -128,7 +140,7 @@ class DBMCached implements DatabaseManager {
 	 * @param  string $method [description]
 	 * @return [type]         [description]
 	 */
-	private function debugMessage(string $str, string $method){
+	protected function debugMessage(string $str, string $method){
 		// fill message array
 		$this->debugMessages[] = $method . ': ' . $str;
 	}
@@ -146,7 +158,7 @@ class DBMCached implements DatabaseManager {
 	 * @param string     $query  [description]
 	 * @param array|null $params [description]
 	 */
-	private function collectQuery(string $query, array $params = null){
+	protected function collectQuery(string $query, array $params = null){
 		// don't collect
 		if(!$this->isCollectingQueries){
 			return;
@@ -157,18 +169,15 @@ class DBMCached implements DatabaseManager {
 	}
 
 	/**
-	 * [isCollectingQueries description]
-	 * @return boolean [description]
-	 */
-	public function isCollectingQueries(){
-		return $this->isCollectingQueries;
-	}
-
-	/**
 	 * [getQueryCollection description]
 	 * @return [type] [description]
 	 */
 	public function getQueryCollection(){
+
+		if(!$this->isCollectingQueries){
+			return false;
+		}
+
 		return $this->queryCollector;
 	}
 
@@ -693,7 +702,7 @@ class DBMCached implements DatabaseManager {
 	 * @param  string $by_key [description]
 	 * @return [type]         [description]
 	 */
-	public function indexArrayByKey(array $arr, string $by_key){
+	protected function indexArrayByKey(array $arr, string $by_key){
 		// init result
 		$result = [];
 
@@ -722,7 +731,7 @@ class DBMCached implements DatabaseManager {
 	 *                             </ul>
 	 * @return array             grouped array
 	 */
-	public function groupArrayByKey(array $arr, string $index, array $selective = [], $opt = []){
+	protected function groupArrayByKey(array $arr, string $index, array $selective = [], $opt = []){
 
 		// 
 		// example $arr:
@@ -816,26 +825,14 @@ class DBMCached implements DatabaseManager {
 	}
 	
 	/**
-	 * Insert/edit elements id DB
-	 *
-	 * @param  array   $data       SQL parameters array in format [column_name => value, …]
-	 * @param  string  $table_name Destination table name
-	 * @param  integer $index      UPDATE query WHERE $opt['index_key'] = $index (index_key is "id" by default)
-	 * @param  array   $opt        Settings:
-	 *                            			<ul>
-	 *                            				<li> <strong> debug </strong> bool (false)
-	 *                            					- Debug mode
-	 *                            				<li> <strong> where </strong> string ("")
-	 *                            					- Manual WHERE string ($index has higher priority so it must be set to 0)
-	 *                            				<li> <strong> where_vals </strong> array ([])
-	 *                            					- Values for $opt['where']
-	 *                            				<li> <strong> index_key </strong> string ("id")
-	 *                            					 - Index key name
-	 *                            			</ul>
-	 *
-	 * @return array              Result status array returned by mysql_do()
+	 * Insert / Update table via params
+	 * @param array  $data       Table data
+	 * @param string $table_name Table name
+	 * @param mixed  $index      Table update key (id or opt.index_key)
+	 * @param array  $opt        Options
 	 */
 	public function set(array $data, string $table_name, $index = null, array $opt = []){
+		
 		// empty data |or  empty table name
 		if(!$data || !strlen($table_name)){
 			return ['status' => false, 'message' => 'Empty input'];
@@ -845,7 +842,7 @@ class DBMCached implements DatabaseManager {
 		
 		// create sql query
 		$sql = '';
-		$vals = [];
+		$params = [];
 		
 		// manual WHERE ($index priority)
 		$where = $opt['where'] ?? '';
@@ -856,7 +853,7 @@ class DBMCached implements DatabaseManager {
 			if($sql) $sql .= ', ';
 			
 			$sql .= '`'.$key.'`=?';
-			$vals[] = $value;
+			$params[] = $value;
 		}
 		
 		// Update by index_key (id)
@@ -864,22 +861,28 @@ class DBMCached implements DatabaseManager {
 			$index_key = $opt['index_key'] ?? 'id';
 			$where = 'WHERE `'.$index_key.'`=?';
 			
-			$vals[] = $index;
+			$params[] = $index;
 		}
 		// Update through manual WHERE
 		elseif($where && $where_vals){
 			foreach ($where_vals as $key => $val){
-				$vals[] = $val;
+				$params[] = $val;
 			}
 		}
+
+		// construct query
+		$query = ($where ? 'UPDATE' : 'INSERT') . " `{$table_name}` SET {$sql} {$where}";
+
+		// log query
+		$this->collectQuery($query, $params);
 		
 		return $this->query(
-			($where ? 'UPDATE' : 'INSERT') . " `{$table_name}` SET {$sql} {$where}",
-			$vals,
-			array(
+			$query,
+			$params,
+			[
 				'debug' => $debug,
 				'return' => $opt['return'] ?? null
-			)
+			]
 		);
 	}
 	
@@ -908,7 +911,7 @@ class DBMCached implements DatabaseManager {
 	 */
 	public function commit(array $opt=[])
 	{
-		try{
+		try {
 			$this->databaseManager->commit();
 			
 			return true;
