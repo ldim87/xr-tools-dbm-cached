@@ -140,9 +140,16 @@ class DBMCached implements DatabaseManager {
 	 * @param  string $method [description]
 	 * @return [type]         [description]
 	 */
-	protected function debugMessage(string $str, string $method){
+	protected function debugMessage(string $str, string $method)
+	{
+		$message = $method . ': ' . $str;
+
+		// Путь к вызову
+		$trace = (new \Exception)->getTrace()[1];
+		$message .= " <br>\n".'File '.$trace['file'].' line '.$trace['line'];
+
 		// fill message array
-		$this->debugMessages[] = $method . ': ' . $str;
+		$this->debugMessages[] = $message;
 	}
 
 	/**
@@ -884,6 +891,17 @@ class DBMCached implements DatabaseManager {
 				'return' => $opt['return'] ?? null
 			]
 		);
+	}
+
+	/**
+	 * Создание части sql запроса из массива
+	 * @param array $data
+	 * @param string $glue
+	 * @return array
+	 */
+	public function genPartSQL(array $data = [], string $glue = ', '): array
+	{
+		return $this->databaseManager->genPartSQL($data, $glue);
 	}
 	
 	/**
