@@ -5,6 +5,8 @@
 
 namespace XrTools;
 
+use \XrTools\Utils\DebugMessages;
+
 /**
  * Adapter for \XrTools\DatabaseManager Interface (Proxy with caching)
  */
@@ -35,10 +37,10 @@ class DBMCached implements DatabaseManager {
 	protected $queryCollector = [];
 	
 	/**
-	 * [$debugMessages description]
-	 * @var array
+	 * Debugger
+	 * @var DebugMessages
 	 */
-	protected $debugMessages = [];
+	protected $dbg;
 
 	/**
 	 * [__construct description]
@@ -46,10 +48,11 @@ class DBMCached implements DatabaseManager {
 	 * @param CacheManager    $cacheManager [description]
 	 * @param array           $opt        [description]
 	 */
-	function __construct(DatabaseManager $databaseManager, CacheManager $cacheManager, array $opt = []){
+	function __construct(DatabaseManager $databaseManager, CacheManager $cacheManager, DebugMessages $dbg, array $opt = []){
 		// set instances
 		$this->databaseManager = $databaseManager;
 		$this->cacheManager = $cacheManager;
+		$this->dbg = $dbg;
 
 		// set options
 		$this->setOptions($opt);		
@@ -81,7 +84,7 @@ class DBMCached implements DatabaseManager {
 		$debug = !empty($opt['debug']);
 
 		if($debug){
-			$this->debugMessage($this->getQueryDebugInfo($query, $params), __METHOD__);
+			$this->dbg->log($this->getQueryDebugInfo($query, $params), __METHOD__);
 		}
 		
 		// Executing the request SQL
@@ -103,7 +106,7 @@ class DBMCached implements DatabaseManager {
 			$result['errcode'] = $e->getCode();
 
 			if($debug){
-				$this->debugMessage($result['message'], __METHOD__);
+				$this->dbg->log($result['message'], __METHOD__);
 			}
 		}
 
@@ -132,32 +135,6 @@ class DBMCached implements DatabaseManager {
 
 	public function setConnectionParams(array $settings){
 		$this->databaseManager->setConnectionParams($settings);
-	}
-
-	/**
-	 * [debugMessage description]
-	 * @param  string $str    [description]
-	 * @param  string $method [description]
-	 * @return [type]         [description]
-	 */
-	protected function debugMessage(string $str, string $method)
-	{
-		$message = $method . ': ' . $str;
-
-		// Путь к вызову
-		$trace = (new \Exception)->getTrace()[1];
-		$message .= " <br>\n".'File '.$trace['file'].' line '.$trace['line'];
-
-		// fill message array
-		$this->debugMessages[] = $message;
-	}
-
-	/**
-	 * [getDebugMessages description]
-	 * @return [type] [description]
-	 */
-	public function getDebugMessages(){
-		return $this->debugMessages;
 	}
 
 	/**
@@ -222,7 +199,7 @@ class DBMCached implements DatabaseManager {
 		$debug = !empty($opt['debug']);
 
 		if($debug){
-			$this->debugMessage($this->getQueryDebugInfo($query, $params), __METHOD__);
+			$this->dbg->log($this->getQueryDebugInfo($query, $params), __METHOD__);
 		}
 
 		// modes: separate multiple keys (0 = cache_prefix) or whole-list key (1 = cache_key)
@@ -287,7 +264,7 @@ class DBMCached implements DatabaseManager {
 					if(!$db_check){
 
 						if($debug){
-							$this->debugMessage(
+							$this->dbg->log(
 								'Cached results found. Skipping query...',
 								__METHOD__
 							);
@@ -365,7 +342,7 @@ class DBMCached implements DatabaseManager {
 				if($cached !== false){
 					
 					if($debug){
-						$this->debugMessage(
+						$this->dbg->log(
 							'Cached result found via key "' . $opt['cache_key'] . '". Skipping query...',
 							__METHOD__
 						);
@@ -415,7 +392,7 @@ class DBMCached implements DatabaseManager {
 			if(!empty($found_in_cache)){
 
 				if($debug){
-					$this->debugMessage('Loaded from cache: ' . "\n" . '<pre>' . print_r($found_in_cache, true) . '</pre>', __METHOD__);
+					$this->dbg->log('Loaded from cache: ' . "\n" . '<pre>' . print_r($found_in_cache, true) . '</pre>', __METHOD__);
 				}
 
 				foreach ($found_in_cache as $key => $val){
@@ -461,7 +438,7 @@ class DBMCached implements DatabaseManager {
 			// if there is anything to save in cache
 			if($to_cache){
 				if($debug){
-					$this->debugMessage('Saving in cache: ' . "\n" . '<pre>' . print_r($to_cache, true) . '</pre>', __METHOD__);
+					$this->dbg->log('Saving in cache: ' . "\n" . '<pre>' . print_r($to_cache, true) . '</pre>', __METHOD__);
 				}
 
 				$this->cacheManager->setMulti($to_cache, $cache_time, true);
@@ -472,7 +449,7 @@ class DBMCached implements DatabaseManager {
 			$result = false;
 
 			if($debug){
-				$this->debugMessage($e->getMessage(), __METHOD__);
+				$this->dbg->log($e->getMessage(), __METHOD__);
 			}
 
 		}
@@ -500,7 +477,7 @@ class DBMCached implements DatabaseManager {
 		$debug = !empty($opt['debug']);
 
 		if($debug){
-			$this->debugMessage($this->getQueryDebugInfo($query, $params), __METHOD__);
+			$this->dbg->log($this->getQueryDebugInfo($query, $params), __METHOD__);
 		}
 		
 		// get cache
@@ -511,7 +488,7 @@ class DBMCached implements DatabaseManager {
 			if($result !== false){
 
 				if($debug){
-					$this->debugMessage(
+					$this->dbg->log(
 						'Cached result found via key "' . $opt['cache_key'] . '". Skipping query...' . "\n",
 						__METHOD__
 					);
@@ -530,7 +507,7 @@ class DBMCached implements DatabaseManager {
 		catch(\Exception $e){
 
 			if($debug){
-				$this->debugMessage($e->getMessage(), __METHOD__);
+				$this->dbg->log($e->getMessage(), __METHOD__);
 			}
 			
 			return false;
@@ -540,7 +517,7 @@ class DBMCached implements DatabaseManager {
 		if($cache){
 
 			if($debug){
-				$this->debugMessage(
+				$this->dbg->log(
 					'Saving cache via key "' . $opt['cache_key'] . '"'. "\nValue:\n" . '<pre>'.print_r($result, true).'</pre>',
 					__METHOD__
 				);
@@ -568,7 +545,7 @@ class DBMCached implements DatabaseManager {
 		$use_cache = !empty($opt['cache']) && !empty($opt['cache_key']);
 
 		if($debug){
-			$this->debugMessage($this->getQueryDebugInfo($query, $params), __METHOD__);
+			$this->dbg->log($this->getQueryDebugInfo($query, $params), __METHOD__);
 		}
 		
 		if($use_cache){
@@ -580,7 +557,7 @@ class DBMCached implements DatabaseManager {
 			if($cached !== false){
 
 				if($debug){
-					$this->debugMessage(
+					$this->dbg->log(
 						'Cached result found via key "' . $opt['cache_key'] . '". Skipping query...' . "\n",
 						__METHOD__
 					);
@@ -606,7 +583,7 @@ class DBMCached implements DatabaseManager {
 				$this->cacheManager->set($opt['cache_key'], $result, $cache_time);
 
 				if($debug){
-					$this->debugMessage(
+					$this->dbg->log(
 						'Saving cache via key "' . $opt['cache_key'] . '"'. "\nValue:\n" . '<pre>'.print_r($result, true).'</pre>',
 						__METHOD__
 					);
@@ -617,7 +594,7 @@ class DBMCached implements DatabaseManager {
 			$result = false;
 
 			if($debug){
-				$this->debugMessage($e->getMessage(), __METHOD__);
+				$this->dbg->log($e->getMessage(), __METHOD__);
 			}
 
 		}
@@ -644,7 +621,7 @@ class DBMCached implements DatabaseManager {
 		$use_cache = !empty($opt['cache']) && !empty($opt['cache_key']);
 
 		if($debug){
-			$this->debugMessage($this->getQueryDebugInfo($query, $params), __METHOD__);
+			$this->dbg->log($this->getQueryDebugInfo($query, $params), __METHOD__);
 		}
 		
 		if($use_cache){
@@ -656,7 +633,7 @@ class DBMCached implements DatabaseManager {
 			if($cached !== false){
 
 				if($debug){
-					$this->debugMessage(
+					$this->dbg->log(
 						'Cached result found via key "' . $opt['cache_key'] . '". Skipping query...' . "\n",
 						__METHOD__
 					);
@@ -681,7 +658,7 @@ class DBMCached implements DatabaseManager {
 				$this->cacheManager->set($opt['cache_key'], $result, $cache_time, true);
 
 				if($debug){
-					$this->debugMessage(
+					$this->dbg->log(
 						'Saving cache via key "' . $opt['cache_key'] . '"'. "\nValue:\n" . '<pre>'.print_r($result, true).'</pre>',
 						__METHOD__
 					);
@@ -693,7 +670,7 @@ class DBMCached implements DatabaseManager {
 			$result = false;
 
 			if($debug){
-				$this->debugMessage($e->getMessage(), __METHOD__);
+				$this->dbg->log($e->getMessage(), __METHOD__);
 			}
 		}
 			
@@ -937,7 +914,7 @@ class DBMCached implements DatabaseManager {
 		catch(\Exception $e){
 			
 			if(!empty($opt['debug'])){
-				$this->debugMessage($e->getMessage(), __METHOD__);
+				$this->dbg->log($e->getMessage(), __METHOD__);
 			}
 			
 			return false;
