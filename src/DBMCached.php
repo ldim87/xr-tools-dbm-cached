@@ -6,6 +6,7 @@
 namespace XrTools;
 
 use \XrTools\Utils\DebugMessages;
+use \PDOException;
 
 /**
  * Adapter for \XrTools\DatabaseManager Interface (Proxy with caching)
@@ -100,7 +101,7 @@ class DBMCached implements DatabaseManager {
 			$result['status'] = true;
 			$result['status_or_insert_id'] = $status_or_insert_id;
 		}
-		catch(\Exception $e){
+		catch(PDOException $e){
 
 			$result['message'] = $e->getMessage();
 			$result['errcode'] = $e->getCode();
@@ -114,15 +115,6 @@ class DBMCached implements DatabaseManager {
 	}
 	
 	/**
-	 * [connect description]
-	 * @param  array  $settings [description]
-	 * @return [type]           [description]
-	 */
-	protected function connect(array $settings){
-		return $this->databaseManager->connect($settings);
-	}
-
-	/**
 	 * [setOptions description]
 	 * @param array $opt [description]
 	 */
@@ -133,6 +125,10 @@ class DBMCached implements DatabaseManager {
 		}
 	}
 
+	/**
+	 * [setConnectionParams description]
+	 * @param array $settings [description]
+	 */
 	public function setConnectionParams(array $settings){
 		$this->databaseManager->setConnectionParams($settings);
 	}
@@ -190,16 +186,17 @@ class DBMCached implements DatabaseManager {
 	 * @return [type]         [description]
 	 */
 	public function fetchArray(string $query, array $params = null, array $opt = []){
-		// error on empty query
-		if(!$query){
-			throw new \Exception('Empty query!');
-		}
-
+		
 		// debug mode
 		$debug = !empty($opt['debug']);
 
 		if($debug){
 			$this->dbg->log($this->getQueryDebugInfo($query, $params), __METHOD__);
+		}
+
+		// error on empty query
+		if(!$query){
+			return false;
 		}
 
 		// modes: separate multiple keys (0 = cache_prefix) or whole-list key (1 = cache_key)
@@ -444,7 +441,7 @@ class DBMCached implements DatabaseManager {
 				$this->cacheManager->setMulti($to_cache, $cache_time, true);
 			}
 			
-		} catch (\Exception $e) {
+		} catch (PDOException $e) {
 			
 			$result = false;
 
@@ -479,6 +476,10 @@ class DBMCached implements DatabaseManager {
 		if($debug){
 			$this->dbg->log($this->getQueryDebugInfo($query, $params), __METHOD__);
 		}
+
+		if(!$query){
+			return false;
+		}
 		
 		// get cache
 		if($cache){
@@ -504,7 +505,7 @@ class DBMCached implements DatabaseManager {
 
 			$result = $this->databaseManager->fetchArrayWithCount($query, $params);
 		}
-		catch(\Exception $e){
+		catch(PDOException $e){
 
 			if($debug){
 				$this->dbg->log($e->getMessage(), __METHOD__);
@@ -546,6 +547,11 @@ class DBMCached implements DatabaseManager {
 
 		if($debug){
 			$this->dbg->log($this->getQueryDebugInfo($query, $params), __METHOD__);
+		}
+
+		// error on empty query
+		if(!$query){
+			return false;
 		}
 		
 		if($use_cache){
@@ -589,7 +595,7 @@ class DBMCached implements DatabaseManager {
 					);
 				}
 			}
-		} catch (\Exception $e) {
+		} catch (PDOException $e) {
 			
 			$result = false;
 
@@ -622,6 +628,11 @@ class DBMCached implements DatabaseManager {
 
 		if($debug){
 			$this->dbg->log($this->getQueryDebugInfo($query, $params), __METHOD__);
+		}
+
+		// error on empty query
+		if(!$query){
+			return false;
 		}
 		
 		if($use_cache){
@@ -665,7 +676,7 @@ class DBMCached implements DatabaseManager {
 				}
 			}
 		}
-		catch (\Exception $e) {
+		catch (PDOException $e) {
 			
 			$result = false;
 
@@ -673,8 +684,7 @@ class DBMCached implements DatabaseManager {
 				$this->dbg->log($e->getMessage(), __METHOD__);
 			}
 		}
-			
-			
+
 		return $result;
 	}
 
@@ -876,24 +886,21 @@ class DBMCached implements DatabaseManager {
 	 * @param string $glue
 	 * @return array
 	 */
-	public function genPartSQL(array $data = [], string $glue = ', '): array
-	{
+	public function genPartSQL(array $data = [], string $glue = ', '): array {
 		return $this->databaseManager->genPartSQL($data, $glue);
 	}
 	
 	/**
 	 * MySQL transaction start
 	 */
-	public function start()
-	{
+	public function start(){
 		$this->databaseManager->start();
 	}
 	
 	/**
 	 * MySQL transaction rollback
 	 */
-	public function rollback()
-	{
+	public function rollback(){
 		$this->databaseManager->rollBack();
 	}
 	
@@ -904,14 +911,13 @@ class DBMCached implements DatabaseManager {
 	 *
 	 * @return bool status implementations
 	 */
-	public function commit(array $opt=[])
-	{
+	public function commit(array $opt=[]){
 		try {
 			$this->databaseManager->commit();
 			
 			return true;
 		}
-		catch(\Exception $e){
+		catch(PDOException $e){
 			
 			if(!empty($opt['debug'])){
 				$this->dbg->log($e->getMessage(), __METHOD__);
