@@ -819,7 +819,7 @@ class DBMCached implements DatabaseManager {
 	}
 	
 	/**
-	 * Insert / Update table via params
+	 * Insert / Update row(s) into table via params
 	 * @param array  $data       Table data
 	 * @param string $table_name Table name
 	 * @param mixed  $index      Table update key (id or opt.index_key)
@@ -827,54 +827,20 @@ class DBMCached implements DatabaseManager {
 	 */
 	public function set(array $data, string $table_name, $index = null, array $opt = []){
 		
-		// empty data |or  empty table name
-		if(!$data || !strlen($table_name)){
-			return ['status' => false, 'message' => 'Empty input'];
-		}
-		
-		$debug = !empty($opt['debug']);
-		
-		// create sql query
-		$sql = '';
-		$params = [];
-		
-		// manual WHERE ($index priority)
-		$where = $opt['where'] ?? '';
-		$where_vals = !empty($opt['where_vals']) && is_array($opt['where_vals']) ? $opt['where_vals'] : [];
-		
-		foreach ($data as $key => $value) {
-			// add to query
-			if($sql) $sql .= ', ';
-			
-			$sql .= '`'.$key.'`=?';
-			$params[] = $value;
-		}
-		
-		// Update by index_key (id)
-		if($index){
-			$index_key = $opt['index_key'] ?? 'id';
-			$where = 'WHERE `'.$index_key.'`=?';
-			
-			$params[] = $index;
-		}
-		// Update through manual WHERE
-		elseif($where && $where_vals){
-			foreach ($where_vals as $key => $val){
-				$params[] = $val;
-			}
-		}
+		$query_data = $this->databaseManager->getInsertUpdateQuery($data, $table_name, $index, $opt);
 
-		// construct query
-		$query = ($where ? 'UPDATE' : 'INSERT') . " `{$table_name}` SET {$sql} {$where}";
+		if(empty($query_data['query'])){
+			return ['status' => false, 'message' => 'Empty query!'];
+		}
 
 		// log query
-		$this->collectQuery($query, $params);
+		$this->collectQuery($query_data['query'], $query_data['params']);
 		
 		return $this->query(
-			$query,
-			$params,
+			$query_data['query'],
+			$query_data['params'],
 			[
-				'debug' => $debug,
+				'debug' => !empty($opt['debug']),
 				'return' => $opt['return'] ?? null
 			]
 		);
@@ -893,15 +859,51 @@ class DBMCached implements DatabaseManager {
 	/**
 	 * MySQL transaction start
 	 */
-	public function start(){
-		$this->databaseManager->start();
+	public function start(bool $debug = false){
+
+		try {
+
+			if($debug){
+				$this->dbg->log('Beginning query transaction', __METHOD__);
+			}
+
+			$this->databaseManager->start();
+			
+			return true;
+		}
+		catch(PDOException $e){
+			
+			if($debug){
+				$this->dbg->log($e->getMessage(), __METHOD__);
+			}
+			
+			return false;
+		}
 	}
 	
 	/**
 	 * MySQL transaction rollback
 	 */
-	public function rollback(){
-		$this->databaseManager->rollBack();
+	public function rollback(bool $debug = false){
+
+		try {
+
+			if($debug){
+				$this->dbg->log('Rolling back query transaction', __METHOD__);
+			}
+
+			$this->databaseManager->rollBack();
+			
+			return true;
+		}
+		catch(PDOException $e){
+			
+			if($debug){
+				$this->dbg->log($e->getMessage(), __METHOD__);
+			}
+			
+			return false;
+		}
 	}
 	
 	/**
@@ -911,15 +913,21 @@ class DBMCached implements DatabaseManager {
 	 *
 	 * @return bool status implementations
 	 */
-	public function commit(array $opt=[]){
+	public function commit(bool $debug = false){
+		
 		try {
+
+			if($debug){
+				$this->dbg->log('Committing query transaction', __METHOD__);
+			}
+
 			$this->databaseManager->commit();
 			
 			return true;
 		}
 		catch(PDOException $e){
 			
-			if(!empty($opt['debug'])){
+			if($debug){
 				$this->dbg->log($e->getMessage(), __METHOD__);
 			}
 			
