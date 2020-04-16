@@ -169,10 +169,10 @@ class DBMCached implements DatabaseManager {
 	 */
 	protected function getQueryDebugInfo(string $query, array $params = null){
 		// set message info
-		$message = 'Query:<br><br>' . $query;
+		$message = "Query:<br><br>\n\n{$query}";
 
 		if(isset($params)){
-			$message .= '<br><br>Bound values:<br><pre>' . htmlspecialchars(print_r($params, true), ENT_QUOTES) . '</pre>';
+			$message .= "<br><br>\n\nBound values:<br>\n<pre>" . htmlspecialchars(print_r($params, true), ENT_QUOTES) . '</pre>';
 		}
 		
 		return $message;
