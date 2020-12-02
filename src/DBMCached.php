@@ -44,6 +44,11 @@ class DBMCached implements DatabaseManager {
 	protected $dbg;
 
 	/**
+	 * @var int
+	 */
+	protected $transactionLevel = 0;
+
+	/**
 	 * [__construct description]
 	 * @param DatabaseManager $databaseManager [description]
 	 * @param CacheManager    $cacheManager [description]
@@ -59,8 +64,24 @@ class DBMCached implements DatabaseManager {
 		$this->setOptions($opt);		
 	}
 
+	/**
+	 * @return mixed
+	 */
 	public function getAffectedRows(){
 		return $this->databaseManager->getAffectedRows();
+	}
+
+	/**
+	 * @param string $query
+	 * @param array|null $params
+	 * @param array $opt
+	 * @return bool
+	 */
+	function exec(string $query, array $params = null, array $opt = [])
+	{
+		$res = $this->query($query, $params, $opt);
+
+		return ! empty($res['status']);
 	}
 	
 	/**
@@ -169,9 +190,9 @@ class DBMCached implements DatabaseManager {
 	 */
 	protected function getQueryDebugInfo(string $query, array $params = null){
 		// set message info
-		$message = "Query:<br><br>\n\n{$query}";
+		$message = "Query:<br><br>\n\n<span class='query-sql'>{$query}</span>";
 
-		if(isset($params)){
+		if (! empty($params)) {
 			$message .= "<br><br>\n\nBound values:<br>\n<pre>" . htmlspecialchars(print_r($params, true), ENT_QUOTES) . '</pre>';
 		}
 		
@@ -855,83 +876,119 @@ class DBMCached implements DatabaseManager {
 	public function genPartSQL(array $data = [], string $glue = ', '): array {
 		return $this->databaseManager->genPartSQL($data, $glue);
 	}
-	
+
 	/**
-	 * MySQL transaction start
+	 * @param bool $debug
+	 * @return bool
 	 */
-	public function start(bool $debug = false){
-
-		try {
-
-			if($debug){
-				$this->dbg->log('Beginning query transaction', __METHOD__);
-			}
-
-			$this->databaseManager->start();
-			
-			return true;
+	function start(bool $debug = false): bool
+	{
+		if ($this->transactionLevel < 1) {
+			$this->transactionLevel = 1;
 		}
-		catch(PDOException $e){
-			
-			if($debug){
-				$this->dbg->log($e->getMessage(), __METHOD__);
+
+		$result = false;
+
+		if ($this->transactionLevel == 1)
+		{
+			try {
+				$result = $this->databaseManager->start();
 			}
-			
+			catch (PDOException $e) {
+				$this->dbg->log2($e->getMessage(), ['debug' => $debug]);
+			}
+		}
+		else {
+			$result = $this->exec('SAVEPOINT dbmc_'.$this->transactionLevel);
+		}
+
+		if (! $result) {
 			return false;
 		}
+
+		$this->dbg->log2('Transaction Start ( '.$this->transactionLevel.' )', ['debug' => $debug]);
+
+		$this->transactionLevel++;
+
+		return true;
 	}
-	
+
 	/**
-	 * MySQL transaction rollback
+	 * @param bool $debug
+	 * @return bool
 	 */
-	public function rollback(bool $debug = false){
-
-		try {
-
-			if($debug){
-				$this->dbg->log('Rolling back query transaction', __METHOD__);
-			}
-
-			$this->databaseManager->rollBack();
-			
-			return true;
-		}
-		catch(PDOException $e){
-			
-			if($debug){
-				$this->dbg->log($e->getMessage(), __METHOD__);
-			}
-			
+	function rollback(bool $debug = false): bool
+	{
+		if ($this->transactionLevel < 1) {
 			return false;
 		}
+
+		$level = $this->transactionLevel;
+		$level--;
+
+		$result = false;
+
+		if ($level == 1)
+		{
+			try {
+				$result = $this->databaseManager->rollback();
+			}
+			catch (PDOException $e) {
+				$this->dbg->log2($e->getMessage(), ['debug' => $debug]);
+			}
+		}
+		else {
+			$result = $this->exec('ROLLBACK TO SAVEPOINT dbmc_'.$level);
+		}
+
+		if (! $result) {
+			return false;
+		}
+
+		$this->dbg->log2('Transaction Rollback ( '.$level.' )', ['debug' => $debug]);
+
+		$this->transactionLevel = $level;
+
+		return true;
 	}
-	
+
 	/**
-	 * MySQL transaction commit
-	 *
-	 * @param array $opt
-	 *
-	 * @return bool status implementations
+	 * @param bool $debug
+	 * @return bool
 	 */
-	public function commit(bool $debug = false){
-		
-		try {
-
-			if($debug){
-				$this->dbg->log('Committing query transaction', __METHOD__);
-			}
-
-			$this->databaseManager->commit();
-			
-			return true;
-		}
-		catch(PDOException $e){
-			
-			if($debug){
-				$this->dbg->log($e->getMessage(), __METHOD__);
-			}
-			
+	function commit(bool $debug = false): bool
+	{
+		if ($this->transactionLevel < 1) {
 			return false;
 		}
+
+		$level = $this->transactionLevel;
+		$level--;
+
+		$result = false;
+
+		if ($level == 1)
+		{
+			try {
+				$result = $this->databaseManager->commit();
+			}
+			catch (PDOException $e) {
+				$this->dbg->log2($e->getMessage(), ['debug' => $debug]);
+			}
+		}
+		else {
+			$result = $this->exec('RELEASE SAVEPOINT dbmc_'.$level);
+		}
+
+		if (! $result) {
+			return false;
+		}
+
+		$this->dbg->log2('Transaction Commit ( '.$level.' )', ['debug' => $debug]);
+
+		$this->transactionLevel = $level;
+
+		return true;
 	}
 }
+
