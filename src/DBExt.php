@@ -55,22 +55,6 @@ class DBExt
 		return $this->db;
 	}
 
-	/**
-	 * @return Utils\Arrays
-	 */
-	function arrays(): Utils\Arrays
-	{
-		return $this->utils->arrays();
-	}
-
-	/**
-	 * @return Utils\Strings
-	 */
-	function strings(): Utils\Strings
-	{
-		return $this->utils->strings();
-	}
-
 	/////////////////////////////////
 	/// Основа
 	/////////////////////////////////
@@ -263,7 +247,7 @@ class DBExt
 	 * @param array $opt
 	 * @return mixed|null
 	 */
-	function getByID(string $table, int $id, array $opt = [])
+	function getById(string $table, int $id, array $opt = [])
 	{
 		return $this->getRowByColumn($table, 'id', $id, $opt);
 	}
@@ -290,22 +274,6 @@ class DBExt
 		$res = array_values($res);
 
 		return $res[0] ?? null;
-	}
-
-	/**
-	 * @param string $table
-	 * @param string $field
-	 * @param int $id
-	 * @param array $opt
-	 * @return mixed|null
-	 */
-	function getFieldByID(string $table, string $field, int $id, array $opt = [])
-	{
-		$whereAnd = [
-			'id' => $id
-		];
-
-		return $this->getFieldWhereAnd($table, $field, $whereAnd, $opt);
 	}
 
 	/////////////////////////////////
@@ -363,7 +331,7 @@ class DBExt
 	 * @param array $opt
 	 * @return bool
 	 */
-	function updateByID(string $table, $id, array $set, array $opt = [])
+	function updateById(string $table, $id, array $set, array $opt = [])
 	{
 		return $this->updateByColumn($table, 'id', $id, $set, $opt);
 	}
@@ -415,7 +383,7 @@ class DBExt
 	 * @param array $opt
 	 * @return mixed
 	 */
-	function deleteByID(string $table, $id, array $opt = [])
+	function deleteById(string $table, $id, array $opt = [])
 	{
 		return $this->deleteByColumn($table, 'id', $id, $opt);
 	}
@@ -509,13 +477,6 @@ class DBExt
 		return $status;
 	}
 
-	function insertListDuplicKey(string $table, array $setList, array $columns = [], array $opt = [])
-	{
-		$opt['duplicKeyColumns'] = $columns;
-
-		return $this->insertList($table, $setList, $opt);
-	}
-
 	/**
 	 * @param string $table
 	 * @param array $set
@@ -540,7 +501,32 @@ class DBExt
 		return $insertID;
 	}
 
-	function insertDuplicKey(string $table, array $set, array $columns = [], array $opt = [])
+	/////////////////////////////////
+	/// Добавление или Обновление
+	/////////////////////////////////
+
+	/**
+	 * @param string $table
+	 * @param array $setList
+	 * @param array $columns
+	 * @param array $opt
+	 * @return bool|int
+	 */
+	function upsertList(string $table, array $setList, array $columns = [], array $opt = [])
+	{
+		$opt['duplicKeyColumns'] = $columns;
+
+		return $this->insertList($table, $setList, $opt);
+	}
+
+	/**
+	 * @param string $table
+	 * @param array $set
+	 * @param array $columns
+	 * @param array $opt
+	 * @return bool|int
+	 */
+	function upsert(string $table, array $set, array $columns = [], array $opt = [])
 	{
 		$opt['duplicKeyColumns'] = $columns;
 
@@ -635,7 +621,7 @@ class DBExt
 
 	/**
 	 * @param array $setColumns
-	 * @param array $opt        -duplicKeyColumns = ['title','num']
+	 * @param array $opt -duplicKeyColumns = ['title','num']
 	 * @return string
 	 */
 	function duplicKeyColumns(array $setColumns, array $opt): string
