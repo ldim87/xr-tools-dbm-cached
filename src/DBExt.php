@@ -29,6 +29,11 @@ class DBExt
 	protected $debug;
 
 	/**
+	 * @var string
+	 */
+	protected $columnQuote = '`';
+
+	/**
 	 * DBExt constructor.
 	 * @param DatabaseManager $db
 	 * @param Utils $utils
@@ -67,7 +72,7 @@ class DBExt
 	 */
 	function query(string $query, array $params = null, array $opt = [])
 	{
-		return $this->db->query($query, $params, $opt);
+		return $this->db->query($query, $params, $this->getOpt($opt));
 	}
 
 	/**
@@ -78,7 +83,7 @@ class DBExt
 	 */
 	function exec(string $query, array $params = null, array $opt = [])
 	{
-		$res = $this->db->query($query, $params, $opt);
+		$res = $this->db->query($query, $params, $this->getOpt($opt));
 
 		return ! empty($res['status']);
 	}
@@ -91,7 +96,7 @@ class DBExt
 	 */
 	function fetchArray(string $query, array $params = null, array $opt = [])
 	{
-		return $this->db->fetchArray($query, $params, $opt);
+		return $this->db->fetchArray($query, $params, $this->getOpt($opt));
 	}
 
 	/**
@@ -102,7 +107,7 @@ class DBExt
 	 */
 	function fetchRow(string $query, array $params = null, array $opt = [])
 	{
-		return $this->db->fetchRow($query, $params, $opt);
+		return $this->db->fetchRow($query, $params, $this->getOpt($opt));
 	}
 
 	/**
@@ -113,7 +118,17 @@ class DBExt
 	 */
 	function fetchColumn(string $query, array $params = null, array $opt = [])
 	{
-		return $this->db->fetchColumn($query, $params, $opt);
+		return $this->db->fetchColumn($query, $params, $this->getOpt($opt));
+	}
+
+	/**
+	 * @param bool $inheritCache
+	 * @param array $opt
+	 * @return mixed
+	 */
+	function getCalcFoundRows(bool $inheritCache = true, array $opt = [])
+	{
+		return $this->db->getCalcFoundRows($inheritCache, $this->getOpt($opt));
 	}
 
 	/**
@@ -124,7 +139,7 @@ class DBExt
 	 */
 	function fetchArrayWithCount(string $query, array $params = null, array $opt = [])
 	{
-		return $this->db->fetchArrayWithCount($query, $params, $opt);
+		return $this->db->fetchArrayWithCount($query, $params, $this->getOpt($opt));
 	}
 
 	/**
@@ -168,36 +183,64 @@ class DBExt
 	/////////////////////////////////
 
 	/**
-	 * @param string $table
+	 * @param string|array $table
 	 * @param array $whereAnd
 	 * @param array $opt
 	 * @return mixed
 	 */
-	function getWhereAnd(string $table, array $whereAnd, array $opt = [])
+	function getWhereAnd( $table, array $whereAnd = [], array $opt = [])
 	{
-		list($where, $params) = $this->partSql($whereAnd, ' AND ');
+		// Для использования $this->source()
+		if (is_array($table))
+		{
+			if (empty($table['from']) || empty($table['fields'])) {
+				return false;
+			}
+
+			// Создаём массив $opt['fields'] если его нет
+			if (empty($opt['fields']) || ! is_array($opt['fields'])) {
+				$opt['fields'] = [];
+			}
+
+			array_push($opt['fields'], ...$table['fields']);
+
+			$from = implode(" \n", $table['from']);
+		}
+		elseif (is_string($table)) {
+			$from = $this->escapeName($table);
+		}
+		else {
+			return false;
+		}
+
+		[$where, $params] = $this->partSQL($whereAnd, true);
+
+		if (is_null($where)) {
+			return false;
+		}
 
 		return $this->fetchArray(
 			'SELECT
 			  '.$this->fields($opt).'
 			FROM
-			  `'.$this->escapeName($table).'`
+			  '.$from.'
 			'.($where ? 'WHERE ' . $where : '').'
+			'.$this->groupBy($opt).'
 			'.$this->orderBy($opt).'
-			'.$this->offsetLimit($opt),
+			'.$this->limitOffset($opt),
 			$params,
 			$this->getOpt($opt)
 		);
 	}
 
 	/**
-	 * @param string $table
+	 * @param string|array $table
 	 * @param string $column
 	 * @param $val
 	 * @param array $opt
 	 * @return mixed
 	 */
-	function getByColumn(string $table, string $column, $val, array $opt = [])
+	function getByColumn($table, string $column, $val, array $opt = [])
 	{
 		$whereAnd = [
 			$column => $val
@@ -207,12 +250,12 @@ class DBExt
 	}
 
 	/**
-	 * @param string $table
+	 * @param string|array $table
 	 * @param array $whereAnd
 	 * @param array $opt
-	 * @return mixed|null
+	 * @return mixed
 	 */
-	function getRowWhereAnd(string $table, array $whereAnd, array $opt = [])
+	function getRowWhereAnd($table, array $whereAnd, array $opt = [])
 	{
 		$opt['limit'] = 1;
 
@@ -226,13 +269,13 @@ class DBExt
 	}
 
 	/**
-	 * @param string $table
+	 * @param string|array $table
 	 * @param string $column
 	 * @param $val
 	 * @param array $opt
-	 * @return mixed|null
+	 * @return mixed
 	 */
-	function getRowByColumn(string $table, string $column, $val, array $opt = [])
+	function getRowByColumn($table, string $column, $val, array $opt = [])
 	{
 		$whereAnd = [
 			$column => $val
@@ -242,24 +285,24 @@ class DBExt
 	}
 
 	/**
-	 * @param string $table
+	 * @param string|array $table
 	 * @param int $id
 	 * @param array $opt
-	 * @return mixed|null
+	 * @return mixed
 	 */
-	function getById(string $table, int $id, array $opt = [])
+	function getById($table, int $id, array $opt = [])
 	{
 		return $this->getRowByColumn($table, 'id', $id, $opt);
 	}
 
 	/**
-	 * @param string $table
+	 * @param string|array $table
 	 * @param string $field
 	 * @param array $whereAnd
 	 * @param array $opt
-	 * @return mixed|null
+	 * @return mixed
 	 */
-	function getFieldWhereAnd(string $table, string $field, array $whereAnd = [], array $opt = [])
+	function getFieldWhereAnd($table, string $field, array $whereAnd = [], array $opt = [])
 	{
 		$opt['fields'] = [
 			$field
@@ -287,21 +330,29 @@ class DBExt
 	 * @param array $opt
 	 * @return bool
 	 */
-	function updateWhereAnd(string $table, array $whereAnd, array $set, array $opt = [])
+	function updateWhereAnd(string $table, array $whereAnd, array $set, array $opt = []): bool
 	{
-		list($set, $params) = $this->partSql($set, ', ');
-		list($where, $params2) = $this->partSql($whereAnd, ' AND ');
+		[$set, $params] = $this->partSQL($set);
+		[$where, $params2] = $this->partSQL($whereAnd, true);
+
+		if (is_null($where) || is_null($set)) {
+			return false;
+		}
+
+		if (empty($set)) {
+			$this->err('Data for updating has not been sent');
+			return false;
+		}
 
 		array_push($params, ...$params2);
 
 		return $this->exec(
 			'UPDATE
-			  `'.$this->escapeName($table).'`
+			  '.$this->escapeName($table).'
 			SET
 			  '.$set.'
-			WHERE
-			  '.$where.'
-			'.$this->offsetLimit($opt),
+			'.($where ? 'WHERE ' . $where : '').'
+			'.$this->limitOffset($opt),
 			$params,
 			$this->getOpt($opt)
 		);
@@ -315,7 +366,7 @@ class DBExt
 	 * @param array $opt
 	 * @return bool
 	 */
-	function updateByColumn(string $table, string $column, $val, array $set, array $opt = [])
+	function updateByColumn(string $table, string $column, $val, array $set, array $opt = []): bool
 	{
 		$whereAnd = [
 			$column => $val
@@ -326,12 +377,12 @@ class DBExt
 
 	/**
 	 * @param string $table
-	 * @param $id
+	 * @param int $id
 	 * @param array $set
 	 * @param array $opt
 	 * @return bool
 	 */
-	function updateById(string $table, $id, array $set, array $opt = [])
+	function updateById(string $table, int $id, array $set, array $opt = [])
 	{
 		return $this->updateByColumn($table, 'id', $id, $set, $opt);
 	}
@@ -344,18 +395,21 @@ class DBExt
 	 * @param string $table
 	 * @param array $whereAnd
 	 * @param array $opt
-	 * @return mixed
+	 * @return bool
 	 */
-	function deleteWhereAnd(string $table, array $whereAnd, array $opt = [])
+	function deleteWhereAnd(string $table, array $whereAnd, array $opt = []): bool
 	{
-		list($part, $params) = $this->partSql($whereAnd, ' AND ');
+		[$where, $params] = $this->partSQL($whereAnd, true);
+
+		if (is_null($where)) {
+			return false;
+		}
 
 		return $this->exec(
 			'DELETE FROM
-			  `'.$this->escapeName($table).'`
-			WHERE
-			  '.$part.'
-			'.$this->offsetLimit($opt),
+			  '.$this->escapeName($table).'
+			'.($where ? 'WHERE ' . $where : '').'
+			'.$this->limitOffset($opt),
 			$params,
 			$this->getOpt($opt)
 		);
@@ -366,9 +420,9 @@ class DBExt
 	 * @param string $column
 	 * @param $val
 	 * @param array $opt
-	 * @return mixed
+	 * @return bool
 	 */
-	function deleteByColumn(string $table, string $column, $val, array $opt = [])
+	function deleteByColumn(string $table, string $column, $val, array $opt = []): bool
 	{
 		$whereAnd = [
 			$column => $val
@@ -379,11 +433,11 @@ class DBExt
 
 	/**
 	 * @param string $table
-	 * @param $id
+	 * @param int $id
 	 * @param array $opt
-	 * @return mixed
+	 * @return bool
 	 */
-	function deleteById(string $table, $id, array $opt = [])
+	function deleteById(string $table, int $id, array $opt = []): bool
 	{
 		return $this->deleteByColumn($table, 'id', $id, $opt);
 	}
@@ -395,12 +449,16 @@ class DBExt
 	/**
 	 * @param string $table
 	 * @param array $setList
-	 * @param array $opt     -insertID = true , -chunkSize = 100 , -columns = ['id','title']
+	 * @param array $opt
+	 *    -insertID = true
+	 *    -chunkSize = 100
+	 *    -columns = ['id','title']
 	 * @return bool|int
 	 */
 	function insertList(string $table, array $setList, array $opt = [])
 	{
 		if (empty($setList) || ! is_array($setList)) {
+			$this->err('No data to write');
 			return false;
 		}
 
@@ -409,17 +467,21 @@ class DBExt
 		$row = $setList[0] ?? [];
 		$temp = '('.$this->valuesIn($row).')';
 
-		$columns = (array) ($opt['columns'] ?? []);
+		$insertColumns = (array) ($opt['columns'] ?? []);
 
-		if (empty($columns)) {
-			$columns = array_keys($row ?? []);
+		if (empty($insertColumns)) {
+			$insertColumns = array_keys($row ?? []);
 		}
 
 		if ($chunkSize)
 		{
 			$setList = array_chunk($setList, $chunkSize);
 
-			$this->transaction($opt);
+			$trans = $this->transaction($opt);
+
+			if (! $trans) {
+				return false;
+			}
 		}
 		else
 		{
@@ -432,7 +494,7 @@ class DBExt
 
 		foreach ($setList as $chunk)
 		{
-			$parts = [];
+			$parts  = [];
 			$params = [];
 
 			foreach ($chunk as $item) {
@@ -442,12 +504,12 @@ class DBExt
 
 			$res = $this->query(
 				'INSERT INTO
-				  `'.$this->escapeName($table).'` (
-					'.$this->escapeNameArr($columns, true).'
+				  '.$this->escapeName($table).' (
+					'.$this->escapeNameArray($insertColumns).'
 				  )
 				VALUES
 				  '.implode(',', $parts).'
-				'.$this->duplicKeyColumns($columns, $opt),
+				'.$this->indexConflict($insertColumns, $opt),
 				$params,
 				$this->getOpt($opt)
 			);
@@ -462,9 +524,13 @@ class DBExt
 		if ($chunkSize)
 		{
 			if ($status) {
-				$this->commit($opt);
+				$trans = $this->commit($opt);
 			} else {
-				$this->rollback($opt);
+				$trans = $this->rollback($opt);
+			}
+
+			if (! $trans) {
+				return false;
 			}
 		}
 		else
@@ -508,13 +574,13 @@ class DBExt
 	/**
 	 * @param string $table
 	 * @param array $setList
-	 * @param array $columns
+	 * @param array $conflictUpdate
 	 * @param array $opt
 	 * @return bool|int
 	 */
-	function upsertList(string $table, array $setList, array $columns = [], array $opt = [])
+	function upsertList(string $table, array $setList, array $conflictUpdate = [], array $opt = [])
 	{
-		$opt['duplicKeyColumns'] = $columns;
+		$opt['conflictUpdate'] = $conflictUpdate;
 
 		return $this->insertList($table, $setList, $opt);
 	}
@@ -522,15 +588,111 @@ class DBExt
 	/**
 	 * @param string $table
 	 * @param array $set
-	 * @param array $columns
+	 * @param array $conflictUpdate
 	 * @param array $opt
 	 * @return bool|int
 	 */
-	function upsert(string $table, array $set, array $columns = [], array $opt = [])
+	function upsert(string $table, array $set, array $conflictUpdate = [], array $opt = [])
 	{
-		$opt['duplicKeyColumns'] = $columns;
+		$opt['conflictUpdate'] = $conflictUpdate;
 
 		return $this->insert($table, $set, $opt);
+	}
+
+	/////////////////////////////////
+	/// Доп. инструменты
+	/////////////////////////////////
+
+	/**
+	 * @param false|array $items
+	 * @param bool $inheritCache
+	 * @param array $opt
+	 * @return array
+	 */
+	function formatCountAndItems( $items, bool $inheritCache = true, array $opt = []): array
+	{
+		$result = [
+			'count' => 0,
+			'items' => [],
+		];
+
+		if ($items) {
+			$result['count'] = $this->getCalcFoundRows($inheritCache, $opt);
+			$result['items'] = $items;
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @param array $from
+	 * @return false|array[]
+	 */
+	function source(array $from)
+	{
+		$from_res = [];
+		$fields_res = [];
+		$aliasUse = [];
+
+		foreach ($from as $source => $fields)
+		{
+			if (is_int($source)) {
+				$source = $fields;
+				$fields = true;
+			}
+
+			preg_match('~^([a-z0-9_-]+)\(([a-z0-9_-]+)\)(?= ([a-z0-9_-]+) *= *([a-z0-9_-]+\.[a-z0-9_-]+)|)~i', $source, $pregSource);
+
+			if (! $pregSource) {
+				$this->err('Link is not valid');
+				return false;
+			}
+
+			[$_, $table, $tableAlias, $columnTable, $columnBind] = array_pad($pregSource, 5, '');
+
+			if (in_array($tableAlias, $aliasUse)) {
+				$this->err('Table with the selected alias is already in the set');
+				return false;
+			}
+
+			$aliasUse []= $tableAlias;
+
+			$table = $this->escapeName($table);
+			$columnTable = $this->escapeName($tableAlias.'.'.$columnTable);
+
+			$tableAndAlias = $table . (! empty($tableAlias) ? ' AS '.$this->escapeName($tableAlias) : '');
+
+			if (empty($columnBind)) {
+				array_unshift($from_res, $tableAndAlias);
+			} else {
+				$from_res []= 'LEFT JOIN '.$tableAndAlias.' ON '.$columnTable.' = '.$this->escapeName($columnBind);
+			}
+
+			if (is_bool($fields) && $fields) {
+				$fields_res []= $this->escapeName($tableAlias).'.*';
+			}
+			else
+			{
+				foreach ($fields as $field)
+				{
+					preg_match('~^([a-z0-9_-]+)(?=\(([a-z0-9_-]+)\)|)~i', $field, $pregField);
+
+					if (! $pregField) {
+						$this->err('Field is not valid');
+						return false;
+					}
+
+					[$_, $column, $alias] = array_pad($pregField, 3, '');
+
+					$fields_res []= $this->escapeName($tableAlias .'.'. $column) . (! empty($alias) ? ' AS '.$this->escapeName($alias) : '');
+				}
+			}
+		}
+
+		return [
+			'from'   => $from_res,
+			'fields' => $fields_res,
+		];
 	}
 
 	/////////////////////////////////
@@ -553,120 +715,190 @@ class DBExt
 	 */
 	function escapeName(string $val): string
 	{
+		$val = str_replace($this->columnQuote, '',  $val);
 		$val = addslashes($val);
-		return str_replace('`', '', $val);
+		$exp = explode('.', $val, 2);
+
+		return $this->columnQuote . implode($this->columnQuote .'.'. $this->columnQuote, $exp) . $this->columnQuote;
 	}
 
 	/**
 	 * @param array $arr
-	 * @param bool $implode
-	 * @return array|string
+	 * @return string
 	 */
-	function escapeNameArr(array $arr, bool $implode = false)
+	function escapeNameArray(array $arr): string
 	{
 		$arr = array_map(function ($item){
 			return $this->escapeName($item);
 		}, $arr);
 
-		if ($implode) {
-			$arr = '`'.implode('`,`', $arr).'`';
-		}
-
-		return $arr;
+		return implode(', ', $arr);
 	}
 
 	/**
-	 * @param array $opt -limit = 10 , -offset = 20
-	 * @return string
-	 */
-	function offsetLimit(array $opt): string
-	{
-		$limit = isset($opt['limit']) ? (int) $opt['limit'] : null;
-		$offset = isset($opt['offset']) ? (int) $opt['offset'] : null;
-
-		return ($limit ? 'LIMIT ' . ($offset ? $offset . ', ' : '') . $limit : '');
-	}
-
-	/**
-	 * @param array $opt -fields = ['title','num']
+	 * @param array $opt
+	 *    -fields = [
+	 *      'title', 'COUNT(`id`)', 'SUM(`num`) AS `sum_num`',
+	 *    ]
 	 * @return string
 	 */
 	function fields(array $opt): string
 	{
-		$fields = (array) ($opt['fields'] ?? ['*']);
+		$fields = $opt['fields'] ?? [];
+		$default = '*';
 
-		preg_match('~(,|SELECT)~i', implode($fields), $preg);
-
-		if ($preg) {
-			return '*';
+		if (empty($fields) || ! is_array($fields)) {
+			return $default;
 		}
 
-		return implode(', ', $fields);
+		// Не даём накидывать левую логику
+		$test = preg_replace('/\((.*?)\)/is', '', implode(' _ ', $fields));
+		preg_match('~(,)~i', $test, $preg);
+
+		if ($preg) {
+			return $default;
+		}
+
+		return implode(", \n", $fields);
 	}
 
 	/**
-	 * @param array $opt -orderBy = ['id', 'desc'] or ['id', 1]
+	 * @param array $opt
+	 *    -orderBy = [
+	 *      $column => $isDesc,
+	 *    ]
 	 * @return string
 	 */
 	function orderBy(array $opt): string
 	{
-		$order = (array) ($opt['orderBy'] ?? []);
+		$order = $opt['orderBy'] ?? [];
 
-		list($column, $type) = array_pad($order, 2, '');
-
-		$type = (mb_strtolower($type) == 'desc' || $type ? 'DESC' : 'ASC');
-
-		return ($column ? 'ORDER BY `'.$this->escapeName($column).'` '.$type : '');
-	}
-
-	/**
-	 * @param array $setColumns
-	 * @param array $opt -duplicKeyColumns = ['title','num']
-	 * @return string
-	 */
-	function duplicKeyColumns(array $setColumns, array $opt): string
-	{
-		if (! isset($opt['duplicKeyColumns'])) {
+		if (empty($order)) {
 			return '';
 		}
 
-		$dkc = (array) ($opt['duplicKeyColumns'] ?? []);
-
-		if (empty($dkc)) {
-			$dkc = $setColumns;
+		if (! is_array($order)) {
+			$order = [
+				$order => false
+			];
 		}
 
-		$dkc = array_map(
+		$part = [];
+
+		foreach ($order as $column => $desc) {
+			$part []= $this->escapeName($column).' '.($desc ? 'DESC' : 'ASC');
+		}
+
+		return 'ORDER BY '.implode(', ', $part);
+	}
+
+	/**
+	 * @param array $opt
+	 * @return string
+	 */
+	function groupBy(array $opt): string
+	{
+		$group = (array) ($opt['groupBy'] ?? []);
+
+		if (empty($group)) {
+			return '';
+		}
+
+		return 'GROUP BY '.$this->escapeNameArray($group);
+	}
+
+	/**
+	 * @param array $opt
+	 *    -limit = 10
+	 *    -offset = 20
+	 * @return string
+	 */
+	function limitOffset(array $opt): string
+	{
+		$limit = (int) ($opt['limit'] ?? 0);
+		$offset = (int) ($opt['offset'] ?? 0);
+
+		if (empty($limit)) {
+			return '';
+		}
+
+		return 'LIMIT ' . ($offset ? $offset . ', ' : '') . $limit;
+	}
+
+	/**
+	 * @param array $insertColumns
+	 * @param array $opt
+	 *    -conflictUpdate = ['name','time']
+	 * @return string
+	 */
+	function indexConflict(array $insertColumns, array $opt): string
+	{
+		if (! isset($opt['conflictUpdate'])) {
+			return '';
+		}
+
+		$update = (array) ($opt['conflictUpdate'] ?? []);
+
+		if (empty($update)) {
+			$update = $insertColumns;
+		}
+
+		if (empty($update)) {
+			return '';
+		}
+
+		$update = array_map(
 			function ($column) {
-				return '`'.$this->escapeName($column).'` = VALUES(`'.$this->escapeName($column).'`)';
+				return $this->escapeName($column).' = VALUES('.$this->escapeName($column).')';
 			},
-			$dkc
+			$update
 		);
 
-		return ($dkc ? 'ON DUPLICATE KEY UPDATE '.implode(', ', $dkc) : '');
+		return 'ON DUPLICATE KEY UPDATE '.implode(', ', $update);
 	}
 
 	/**
 	 * Создание части sql запроса из массива
 	 * @param array $data
-	 * @param string $glue
-	 * @return array
+	 * @param bool $whereAnd (where and or update set)
+	 * @return false|array
 	 */
-	function partSql(array $data = [], string $glue = ', '): array
+	function partSQL(array $data = [], bool $whereAnd = false)
 	{
 		$part_sql = [];
 		$params = [];
 
 		foreach ($data as $key => $value)
 		{
-			$key = '`'.$this->escapeName($key).'`';
+			$key = $this->escapeName($key);
 
 			if (is_null($value)) {
 				$part_sql []= $key.' = NULL';
 			}
-			elseif (is_array($value)) {
-				$part_sql []= $key.' IN ('.$this->valuesIn($value).')';
-				array_push($params, ...$value);
+			elseif ($whereAnd && is_array($value))
+			{
+				$way = array_shift($value);
+
+				// Не даём накидывать левую логику
+				preg_match("~(&&|\|\||(AND|OR)[ \n\r\t]+)~i", $way, $preg);
+
+				if ($preg) {
+					$this->err('Parameter contains forbidden elements');
+					return false;
+				}
+
+				if (substr_count($way, '?...') && is_array($value[0]))
+				{
+					$inArr = array_shift($value);
+					$way = str_replace('?...', $this->valuesIn($inArr), $way);
+					array_push($params, ...$inArr);
+				}
+
+				if (! empty($value)) {
+					array_push($params, ...$value);
+				}
+
+				$part_sql []= $key.' '.$way;
 			}
 			else {
 				$part_sql []= $key.' = ?';
@@ -674,15 +906,27 @@ class DBExt
 			}
 		}
 
+		// where and or update set
+		$glue = $whereAnd ? ' AND ' : ', ';
+
 		return [
 			implode($glue, $part_sql),
-			$params
+			$params,
 		];
 	}
 
 	/////////////////////////////////
 	/// Внутреннее
 	/////////////////////////////////
+
+	/**
+	 * @param string $message
+	 * @param array $opt
+	 */
+	protected function err(string $message, array $opt = []): void
+	{
+		$this->utils->dbg()->log2($message, $this->getOpt($opt));
+	}
 
 	/**
 	 * @param array $opt
@@ -694,15 +938,6 @@ class DBExt
 		$opt['debug'] = $this->debug || ! empty($opt['debug']);
 
 		return array_merge($opt, $opt2);
-	}
-
-	/**
-	 * @param string $message
-	 * @param array $opt
-	 */
-	protected function err(string $message, array $opt): void
-	{
-		$this->utils->dbg()->log2($message, $opt);
 	}
 }
 
