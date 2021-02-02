@@ -742,7 +742,14 @@ class DBMCached implements DatabaseManager
 	 */
 	function getCalcFoundRows(bool $inheritCache = true, array $opt = [])
 	{
-		if (empty($this->lastQueryFetch)) {
+		$debug = ! empty($opt['debug']);
+
+		if (empty($this->lastQueryFetch))
+		{
+			if ($debug) {
+				$this->dbg->log('No previous select query found', __METHOD__);
+			}
+
 			return false;
 		}
 

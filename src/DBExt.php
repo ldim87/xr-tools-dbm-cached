@@ -340,7 +340,7 @@ class DBExt
 		}
 
 		if (empty($set)) {
-			$this->err('Не переданы данные для обновления');
+			$this->err('Data for updating has not been sent');
 			return false;
 		}
 
@@ -458,7 +458,7 @@ class DBExt
 	function insertList(string $table, array $setList, array $opt = [])
 	{
 		if (empty($setList) || ! is_array($setList)) {
-			$this->err('Отсутствуют данные для записи');
+			$this->err('No data to write');
 			return false;
 		}
 
@@ -644,14 +644,14 @@ class DBExt
 			preg_match('~^([a-z0-9_-]+)\(([a-z0-9_-]+)\)(?= ([a-z0-9_-]+) *= *([a-z0-9_-]+\.[a-z0-9_-]+)|)~i', $source, $pregSource);
 
 			if (! $pregSource) {
-				$this->err('Связь не валидна');
+				$this->err('Link is not valid');
 				return false;
 			}
 
 			[$_, $table, $tableAlias, $columnTable, $columnBind] = array_pad($pregSource, 5, '');
 
 			if (in_array($tableAlias, $aliasUse)) {
-				$this->err('Таблица выбранным алиасом уже есть в наборе');
+				$this->err('Table with the selected alias is already in the set');
 				return false;
 			}
 
@@ -678,7 +678,7 @@ class DBExt
 					preg_match('~^([a-z0-9_-]+)(?=\(([a-z0-9_-]+)\)|)~i', $field, $pregField);
 
 					if (! $pregField) {
-						$this->err('Поле не валидно');
+						$this->err('Field is not valid');
 						return false;
 					}
 
@@ -751,7 +751,9 @@ class DBExt
 			return $default;
 		}
 
-		preg_match('~(,)~i', implode($fields), $preg);
+		// Не даём накидывать левую логику
+		$test = preg_replace('/\((.*?)\)/is', '', implode(' _ ', $fields));
+		preg_match('~(,)~i', $test, $preg);
 
 		if ($preg) {
 			return $default;
@@ -877,10 +879,11 @@ class DBExt
 			{
 				$way = array_shift($value);
 
-				preg_match("~(,|&&|\|\||(AND|OR)[ \n\r\t]+)~i", $way, $preg);
+				// Не даём накидывать левую логику
+				preg_match("~(&&|\|\||(AND|OR)[ \n\r\t]+)~i", $way, $preg);
 
 				if ($preg) {
-					$this->err('Параметр содержит запрещённые элементы');
+					$this->err('Parameter contains forbidden elements');
 					return false;
 				}
 
