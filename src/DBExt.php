@@ -509,7 +509,7 @@ class DBExt
 				  )
 				VALUES
 				  '.implode(',', $parts).'
-				'.$this->indexConflict($insertColumns, $opt),
+				'.$this->indexConflict($opt, $insertColumns),
 				$params,
 				$this->getOpt($opt)
 			);
@@ -668,10 +668,7 @@ class DBExt
 				$from_res []= 'LEFT JOIN '.$tableAndAlias.' ON '.$columnTable.' = '.$this->escapeName($columnBind);
 			}
 
-			if (is_bool($fields) && $fields) {
-				$fields_res []= $this->escapeName($tableAlias).'.*';
-			}
-			else
+			if (is_array($fields))
 			{
 				foreach ($fields as $field)
 				{
@@ -687,6 +684,9 @@ class DBExt
 					$fields_res []= $this->escapeName($tableAlias .'.'. $column) . (! empty($alias) ? ' AS '.$this->escapeName($alias) : '');
 				}
 			}
+			elseif ($fields) {
+				$fields_res []= $this->escapeName($tableAlias).'.*';
+			}
 		}
 
 		return [
@@ -694,10 +694,6 @@ class DBExt
 			'fields' => $fields_res,
 		];
 	}
-
-	/////////////////////////////////
-	/// Хэлперы
-	/////////////////////////////////
 
 	/**
 	 * @param array $arr
@@ -826,12 +822,12 @@ class DBExt
 	}
 
 	/**
-	 * @param array $insertColumns
 	 * @param array $opt
 	 *    -conflictUpdate = ['name','time']
+	 * @param array $insertColumns
 	 * @return string
 	 */
-	function indexConflict(array $insertColumns, array $opt): string
+	function indexConflict(array $opt, array $insertColumns = []): string
 	{
 		if (! isset($opt['conflictUpdate'])) {
 			return '';
