@@ -144,9 +144,22 @@ class DBExt
 
 	/**
 	 * @param array $opt
+	 * @return Transaction
+	 */
+	function transaction(array $opt = []): Transaction
+	{
+		return new Transaction(
+			$this,
+			$this->utils,
+			$this->getOpt($opt)
+		);
+	}
+
+	/**
+	 * @param array $opt
 	 * @return bool
 	 */
-	function transaction(array $opt = []): bool
+	function beginTransaction(array $opt = []): bool
 	{
 		$opt = $this->getOpt($opt);
 		$debug = ! empty($opt['debug']);
@@ -197,23 +210,22 @@ class DBExt
 				return false;
 			}
 
-			// Создаём массив $opt['fields'] если его нет
-			if (empty($opt['fields']) || ! is_array($opt['fields'])) {
-				$opt['fields'] = [];
-			}
+			$fields = [];
+			array_push($fields, ...$table['fields']);
+			array_push($fields, ...$opt['fields'] ?? []);
 
-			array_push($opt['fields'], ...$table['fields']);
+			$opt['fields'] = $fields;
 
 			$from = implode(" \n", $table['from']);
 		}
 		elseif (is_string($table)) {
-			$from = $this->escapeName($table);
+			$from = $this->escapeNameAndAlias($table);
 		}
 		else {
 			return false;
 		}
 
-		[$where, $params] = $this->partSQL($whereAnd, true);
+		[$where, $params] = $this->partSQLWhereAnd($whereAnd);
 
 		if (is_null($where)) {
 			return false;
@@ -319,6 +331,17 @@ class DBExt
 		return $res[0] ?? null;
 	}
 
+	/**
+	 * @param string|array $table
+	 * @param array $whereAnd
+	 * @param array $opt
+	 * @return mixed
+	 */
+	function getCountWhereAnd($table, array $whereAnd = [], array $opt = [])
+	{
+		return $this->getFieldWhereAnd($table, 'COUNT(*)', $whereAnd, $opt);
+	}
+
 	/////////////////////////////////
 	/// Обновление
 	/////////////////////////////////
@@ -332,8 +355,8 @@ class DBExt
 	 */
 	function updateWhereAnd(string $table, array $whereAnd, array $set, array $opt = []): bool
 	{
-		[$set, $params] = $this->partSQL($set);
-		[$where, $params2] = $this->partSQL($whereAnd, true);
+		[$set, $params] = $this->partSQLSet($set);
+		[$where, $params2] = $this->partSQLWhereAnd($whereAnd);
 
 		if (is_null($where) || is_null($set)) {
 			return false;
@@ -399,7 +422,7 @@ class DBExt
 	 */
 	function deleteWhereAnd(string $table, array $whereAnd, array $opt = []): bool
 	{
-		[$where, $params] = $this->partSQL($whereAnd, true);
+		[$where, $params] = $this->partSQLWhereAnd($whereAnd);
 
 		if (is_null($where)) {
 			return false;
@@ -462,45 +485,30 @@ class DBExt
 			return false;
 		}
 
-		$chunkSize = $opt['chunkSize'] ?? false;
+		$useChunk = ! empty($opt['chunkSize']);
+		$chunkSize = $opt['chunkSize'] ?? 10000000;
 
 		$row = $setList[0] ?? [];
-		$temp = '('.$this->valuesIn($row).')';
-
 		$insertColumns = (array) ($opt['columns'] ?? []);
 
 		if (empty($insertColumns)) {
 			$insertColumns = array_keys($row ?? []);
 		}
 
-		if ($chunkSize)
+		$setList = array_chunk($setList, $chunkSize);
+
+		if ($useChunk)
 		{
-			$setList = array_chunk($setList, $chunkSize);
-
-			$trans = $this->transaction($opt);
-
-			if (! $trans) {
+			if (! $this->beginTransaction($opt)) {
 				return false;
 			}
-		}
-		else
-		{
-			$setList = [
-				$setList
-			];
 		}
 
 		$res = false;
 
 		foreach ($setList as $chunk)
 		{
-			$parts  = [];
-			$params = [];
-
-			foreach ($chunk as $item) {
-				$parts []= $temp;
-				array_push($params, ...array_values($item));
-			}
+			[$partSql, $params] = $this->partSQLInsert($insertColumns, $chunk);
 
 			$res = $this->query(
 				'INSERT INTO
@@ -508,7 +516,7 @@ class DBExt
 					'.$this->escapeNameArray($insertColumns).'
 				  )
 				VALUES
-				  '.implode(',', $parts).'
+				  '.$partSql.'
 				'.$this->indexConflict($opt, $insertColumns),
 				$params,
 				$this->getOpt($opt)
@@ -521,7 +529,7 @@ class DBExt
 
 		$status = ! empty($res['status']);
 
-		if ($chunkSize)
+		if ($useChunk)
 		{
 			if ($status) {
 				$trans = $this->commit($opt);
@@ -607,21 +615,18 @@ class DBExt
 	 * @param false|array $items
 	 * @param bool $inheritCache
 	 * @param array $opt
-	 * @return array
+	 * @return array|false
 	 */
-	function formatCountAndItems( $items, bool $inheritCache = true, array $opt = []): array
+	function formatCountAndItems( $items, bool $inheritCache = true, array $opt = [])
 	{
-		$result = [
-			'count' => 0,
-			'items' => [],
-		];
-
-		if ($items) {
-			$result['count'] = $this->getCalcFoundRows($inheritCache, $opt);
-			$result['items'] = $items;
+		if (! is_array($items)) {
+			return false;
 		}
 
-		return $result;
+		return [
+			'count' => $this->getCalcFoundRows($inheritCache, $opt),
+			'items' => $items,
+		];
 	}
 
 	/**
@@ -641,7 +646,11 @@ class DBExt
 				$fields = true;
 			}
 
-			preg_match('~^([a-z0-9_-]+)\(([a-z0-9_-]+)\)(?= ([a-z0-9_-]+) *= *([a-z0-9_-]+\.[a-z0-9_-]+)|)~i', $source, $pregSource);
+			preg_match(
+				'~^([a-z0-9_-]+)\(([a-z0-9_-]+)\)(?= ([a-z0-9_-]+) *= *([a-z0-9_-]+\.[a-z0-9_-]+)|)~i',
+				$source,
+				$pregSource
+			);
 
 			if (! $pregSource) {
 				$this->err('Link is not valid');
@@ -672,7 +681,11 @@ class DBExt
 			{
 				foreach ($fields as $field)
 				{
-					preg_match('~^([a-z0-9_-]+)(?=\(([a-z0-9_-]+)\)|)~i', $field, $pregField);
+					preg_match(
+						'~^([a-z0-9_-]+)(?=\(([a-z0-9_-]+)\)|)~i',
+						$field,
+						$pregField
+					);
 
 					if (! $pregField) {
 						$this->err('Field is not valid');
@@ -696,6 +709,30 @@ class DBExt
 	}
 
 	/**
+	 * @param array $whereAnd1
+	 * @param array $whereAnd2
+	 * @return false|string[]
+	 */
+	function or(array $whereAnd1, array $whereAnd2)
+	{
+		[$where1, $params1] = $this->partSQLWhereAnd($whereAnd1);
+		[$where2, $params2] = $this->partSQLWhereAnd($whereAnd2);
+
+		if (is_null($where1) || is_null($where2)) {
+			return false;
+		}
+
+		$return = [
+			'('.$where1.' OR '.$where2.')'
+		];
+
+		array_push($return, ...$params1);
+		array_push($return, ...$params2);
+
+		return $return;
+	}
+
+	/**
 	 * @param array $arr
 	 * @return string
 	 */
@@ -716,6 +753,21 @@ class DBExt
 		$exp = explode('.', $val, 2);
 
 		return $this->columnQuote . implode($this->columnQuote .'.'. $this->columnQuote, $exp) . $this->columnQuote;
+	}
+
+	/**
+	 * @param string $val
+	 * @return string
+	 */
+	function escapeNameAndAlias(string $val): string
+	{
+		preg_match('~^([a-z0-9_-]+)\(([a-z0-9_-]+)\)~i', $val, $preg);
+
+		if (! $preg) {
+			return $this->escapeName($val);
+		}
+
+		return $this->escapeName($preg[1]).' AS '.$this->escapeName($preg[2]);
 	}
 
 	/**
@@ -854,59 +906,122 @@ class DBExt
 	}
 
 	/**
-	 * Создание части sql запроса из массива
-	 * @param array $data
-	 * @param bool $whereAnd (where and or update set)
-	 * @return false|array
+	 * Создание части sql запроса Insert
+	 * @param array $columns
+	 * @param array $dataRows
+	 * @return array
 	 */
-	function partSQL(array $data = [], bool $whereAnd = false)
+	function partSQLInsert(array $columns, array $dataRows): array
 	{
-		$part_sql = [];
+		$partSql = [];
+		$params = [];
+
+		$vars = '('.$this->valuesIn($columns).')';
+
+		foreach ($dataRows as $item) {
+			$partSql []= $vars;
+			array_push($params, ...array_values($item));
+		}
+
+		return [
+			implode(', ', $partSql),
+			$params,
+		];
+	}
+
+	/**
+	 * Создание части sql запроса Set из массива
+	 * @param array $data
+	 * @return array
+	 */
+	function partSQLSet(array $data = []): array
+	{
+		$partSql = [];
 		$params = [];
 
 		foreach ($data as $key => $value)
 		{
-			$key = $this->escapeName($key);
+			$column = $this->escapeName($key);
 
 			if (is_null($value)) {
-				$part_sql []= $key.' = NULL';
+				$partSql []= $column.' = NULL';
+			} else {
+				$partSql []= $column.' = ?';
+				$params []= $value;
 			}
-			elseif ($whereAnd && is_array($value))
+		}
+
+		return [
+			implode(", \n", $partSql),
+			$params,
+		];
+	}
+
+	/**
+	 * Создание части sql запроса WhereAnd из массива
+	 * @param array $data
+	 * @return array|false
+	 */
+	function partSQLWhereAnd(array $data = [])
+	{
+		$partSql = [];
+		$params = [];
+
+		foreach ($data as $key => $value)
+		{
+			$column = $this->escapeName($key);
+
+			if (is_null($value))
+			{
+				$partSql []= $column.' IS NULL';
+			}
+			elseif (is_array($value))
 			{
 				$way = array_shift($value);
 
-				// Не даём накидывать левую логику
-				preg_match("~(&&|\|\||(AND|OR)[ \n\r\t]+)~i", $way, $preg);
-
-				if ($preg) {
-					$this->err('Parameter contains forbidden elements');
-					return false;
-				}
-
-				if (substr_count($way, '?...') && is_array($value[0]))
+				// Если идёт вставка чистого sql
+				if (is_int($key))
 				{
-					$inArr = array_shift($value);
-					$way = str_replace('?...', $this->valuesIn($inArr), $way);
-					array_push($params, ...$inArr);
+					$partSql []= $way;
+				}
+				else
+				{
+					// Не даём накидывать левую логику
+					preg_match("~(&&|\|\||(AND|OR)[ \n\r\t]+)~i", $way, $preg);
+
+					if ($preg) {
+						$this->err('Parameter contains forbidden elements');
+						return false;
+					}
+
+					if (substr_count($way, '?...') && is_array($value[0]))
+					{
+						$inArr = array_shift($value);
+						$way = str_replace('?...', $this->valuesIn($inArr), $way);
+						array_push($params, ...$inArr);
+					}
+
+					$partSql []= $column.' '.$way;
 				}
 
 				if (! empty($value)) {
 					array_push($params, ...$value);
 				}
-
-				$part_sql []= $key.' '.$way;
 			}
-			else {
-				$part_sql []= $key.' = ?';
+			// Если $this->or() вернёт false то принимаем за ошибку
+			elseif ($value === false)
+			{
+				return false;
+			}
+			else
+			{
+				$partSql []= $column.' = ?';
 				$params []= $value;
 			}
 		}
 
-		// where and or update set
-		$glue = $whereAnd ? ' AND ' : ', ';
-
 		return [
-			implode($glue, $part_sql),
+			implode("\n AND ", $partSql),
 			$params,
 		];
 	}
