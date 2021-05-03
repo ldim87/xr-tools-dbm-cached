@@ -206,7 +206,7 @@ class DBExt
 		// Для использования $this->source()
 		if (is_array($table))
 		{
-			if (empty($table['from']) || empty($table['fields'])) {
+			if (empty($table['from']) || empty($table['fields']) || empty($table['main_table'])) {
 				return false;
 			}
 
@@ -304,7 +304,18 @@ class DBExt
 	 */
 	function getById($table, int $id, array $opt = [])
 	{
-		return $this->getRowByColumn($table, 'id', $id, $opt);
+		$alias = '';
+
+		if (is_array($table))
+		{
+			if (! $table['main_table']) {
+				return false;
+			}
+
+			$alias = $table['main_table'].'.';
+		}
+
+		return $this->getRowByColumn($table, ($alias ? $alias : '').'id', $id, $opt);
 	}
 
 	/**
@@ -637,6 +648,7 @@ class DBExt
 	{
 		$from_res = [];
 		$fields_res = [];
+		$mainTable = null;
 		$aliasUse = [];
 
 		foreach ($from as $source => $fields)
@@ -666,14 +678,19 @@ class DBExt
 
 			$aliasUse []= $tableAlias;
 
-			$table = $this->escapeName($table);
 			$columnTable = $this->escapeName($tableAlias.'.'.$columnTable);
+			$tableAndAlias = $this->escapeName($table) . (! empty($tableAlias) ? ' AS '.$this->escapeName($tableAlias) : '');
 
-			$tableAndAlias = $table . (! empty($tableAlias) ? ' AS '.$this->escapeName($tableAlias) : '');
-
-			if (empty($columnBind)) {
+			if (empty($columnBind))
+			{
 				array_unshift($from_res, $tableAndAlias);
-			} else {
+
+				if ($table || $tableAlias) {
+					$mainTable = $tableAlias ? $tableAlias : $table;
+				}
+			}
+			else
+			{
 				$from_res []= 'LEFT JOIN '.$tableAndAlias.' ON '.$columnTable.' = '.$this->escapeName($columnBind);
 			}
 
@@ -697,14 +714,16 @@ class DBExt
 					$fields_res []= $this->escapeName($tableAlias .'.'. $column) . (! empty($alias) ? ' AS '.$this->escapeName($alias) : '');
 				}
 			}
-			elseif ($fields) {
+			elseif ($fields)
+			{
 				$fields_res []= $this->escapeName($tableAlias).'.*';
 			}
 		}
 
 		return [
-			'from'   => $from_res,
-			'fields' => $fields_res,
+			'from'       => $from_res,
+			'fields'     => $fields_res,
+			'main_table' => $mainTable,
 		];
 	}
 
