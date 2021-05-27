@@ -22,7 +22,7 @@ $opt = [
 		'type' => true
 	],
 
-	// Столбцы попадают в sql запрос в чистом виде,
+	// Столбцы попадают в sql запрос в чистом виде!,
 	// потому в некоторых случаях может потребоваться экранирование кавычками
 	'fields' => [
 		'`id`',
@@ -54,9 +54,24 @@ $list = $dbe->getWhereAnd('table', [
 
 
 // Получение одного столбца
+// ps. field в sql идёт в чистом виде
 
 $value = $dbe->getFieldWhereAnd('table', 'COUNT(`id`)', [
 	'type' => 9
+]);
+
+
+// Получение COUNT(*)
+
+$value = $dbe->getCountWhereAnd('table', [
+	'type' => 9
+]);
+
+
+// С алиасом
+
+$row = $dbe->getRowWhereAnd('table(t)', [
+	't.id' => 123
 ]);
 
 
