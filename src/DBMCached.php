@@ -58,9 +58,9 @@ class DBMCached implements DatabaseManager
 	 */
 	private $lastError = '';
 	/**
-	 * @var int
+	 * @var string
 	 */
-	private $lastErrorCode = 0;
+	private $lastErrorCode = '';
 
 	/**
 	 * DBMCached constructor.
@@ -101,9 +101,9 @@ class DBMCached implements DatabaseManager
 	}
 
 	/**
-	 * @return int
+	 * @return string
 	 */
-	function getLastErrorCode(): int
+	function getLastErrorCode(): string
 	{
 		return $this->lastErrorCode;
 	}
@@ -840,8 +840,8 @@ class DBMCached implements DatabaseManager
 	 */
 	protected function setLastError(\Exception $exception)
 	{
-		$this->lastError = $exception->getMessage();
-		$this->lastErrorCode = $exception->getCode();
+		$this->lastError = (string) $exception->getMessage();
+		$this->lastErrorCode = (string) $exception->getCode();
 	}
 
 	/**
@@ -850,7 +850,7 @@ class DBMCached implements DatabaseManager
 	protected function resetLastError()
 	{
 		$this->lastError = '';
-		$this->lastErrorCode = 0;
+		$this->lastErrorCode = '';
 	}
 
 	/**

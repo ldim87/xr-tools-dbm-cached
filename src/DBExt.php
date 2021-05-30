@@ -216,9 +216,9 @@ class DBExt
 	}
 
 	/**
-	 * @return int
+	 * @return string
 	 */
-	function getLastErrorCode(): int
+	function getLastErrorCode(): string
 	{
 		return $this->db->getLastErrorCode();
 	}
