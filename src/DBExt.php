@@ -199,6 +199,30 @@ class DBExt
 		return $this->db->commit($debug);
 	}
 
+	/**
+	 * @return array
+	 */
+	function getLastQueryFetch(): array
+	{
+		return $this->db->getLastQueryFetch();
+	}
+
+	/**
+	 * @return string
+	 */
+	function getLastError(): string
+	{
+		return $this->db->getLastError();
+	}
+
+	/**
+	 * @return int
+	 */
+	function getLastErrorCode(): int
+	{
+		return $this->db->getLastErrorCode();
+	}
+
 	/////////////////////////////////
 	/// Получение
 	/////////////////////////////////
@@ -489,7 +513,7 @@ class DBExt
 	 */
 	function insertList(string $table, array $setList, array $opt = [])
 	{
-		if (empty($setList) || ! is_array($setList)) {
+		if (! $table || ! $setList) {
 			$this->err('No data to write');
 			return false;
 		}
@@ -531,7 +555,7 @@ class DBExt
 				$this->opt($opt)
 			);
 
-			if (! $res) {
+			if (empty($res['status'])) {
 				break;
 			}
 		}

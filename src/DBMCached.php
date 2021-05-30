@@ -53,6 +53,14 @@ class DBMCached implements DatabaseManager
 	 * @var array
 	 */
 	protected $lastQueryFetch = [];
+	/**
+	 * @var string
+	 */
+	private $lastError = '';
+	/**
+	 * @var int
+	 */
+	private $lastErrorCode = 0;
 
 	/**
 	 * DBMCached constructor.
@@ -74,6 +82,30 @@ class DBMCached implements DatabaseManager
 
 		// set options
 		$this->setOptions($opt);		
+	}
+
+	/**
+	 * @return array
+	 */
+	function getLastQueryFetch(): array
+	{
+		return $this->lastQueryFetch;
+	}
+
+	/**
+	 * @return string
+	 */
+	function getLastError(): string
+	{
+		return $this->lastError;
+	}
+
+	/**
+	 * @return int
+	 */
+	function getLastErrorCode(): int
+	{
+		return $this->lastErrorCode;
 	}
 
 	/**
@@ -108,6 +140,8 @@ class DBMCached implements DatabaseManager
 	 */
 	public function query(string $query, array $params = null, array $opt = [])
 	{
+		$this->resetLastError();
+
 		// prepare result array
 		$result = [
 			'status' => false,
@@ -136,6 +170,8 @@ class DBMCached implements DatabaseManager
 		}
 		catch(PDOException $e)
 		{
+			$this->setLastError($e);
+
 			$result['message'] = $e->getMessage();
 			$result['errcode'] = $e->getCode();
 
@@ -225,6 +261,7 @@ class DBMCached implements DatabaseManager
 	 */
 	public function fetchArray(string $query, array $params = null, array $opt = [])
 	{
+		$this->resetLastError();
 		$this->setLastQueryFetch($query, $params, $opt);
 
 		// debug mode
@@ -491,6 +528,8 @@ class DBMCached implements DatabaseManager
 		}
 		catch (PDOException $e)
 		{
+			$this->setLastError($e);
+
 			$result = false;
 
 			if ($debug) {
@@ -511,6 +550,8 @@ class DBMCached implements DatabaseManager
 	 */
 	public function fetchArrayWithCount(string $query, array $params = null, array $opt = [])
 	{
+		$this->resetLastError();
+
 		$cache = ! empty($opt['cache']) && ! empty($opt['cache_key']);
 		$debug = ! empty($opt['debug']);
 
@@ -549,6 +590,8 @@ class DBMCached implements DatabaseManager
 		}
 		catch(PDOException $e)
 		{
+			$this->setLastError($e);
+
 			if ($debug) {
 				$this->dbg->log($e->getMessage(), __METHOD__);
 			}
@@ -581,6 +624,7 @@ class DBMCached implements DatabaseManager
 	 */
 	public function fetchColumn(string $query, array $params = null, array $opt = [])
 	{
+		$this->resetLastError();
 		$this->setLastQueryFetch($query, $params, $opt);
 
 		// debug mode
@@ -645,6 +689,8 @@ class DBMCached implements DatabaseManager
 		}
 		catch (PDOException $e)
 		{
+			$this->setLastError($e);
+
 			$result = false;
 
 			if ($debug) {
@@ -663,6 +709,7 @@ class DBMCached implements DatabaseManager
 	 */
 	public function fetchRow(string $query, array $params = null, array $opt = [])
 	{
+		$this->resetLastError();
 		$this->setLastQueryFetch($query, $params, $opt);
 
 		// debug mode
@@ -725,6 +772,8 @@ class DBMCached implements DatabaseManager
 		}
 		catch (PDOException $e)
 		{
+			$this->setLastError($e);
+
 			$result = false;
 
 			if ($debug) {
@@ -783,6 +832,25 @@ class DBMCached implements DatabaseManager
 			'params' => $params,
 			'opt'    => $opt,
 		];
+	}
+
+	/**
+	 * Последняя ошибка
+	 * @param \Exception $exception
+	 */
+	protected function setLastError(\Exception $exception)
+	{
+		$this->lastError = $exception->getMessage();
+		$this->lastErrorCode = $exception->getCode();
+	}
+
+	/**
+	 * Сброс последней ошибки
+	 */
+	protected function resetLastError()
+	{
+		$this->lastError = '';
+		$this->lastErrorCode = 0;
 	}
 
 	/**
@@ -962,6 +1030,8 @@ class DBMCached implements DatabaseManager
 	 */
 	function start(bool $debug = false): bool
 	{
+		$this->resetLastError();
+
 		if ($this->transactionLevel < 1) {
 			$this->transactionLevel = 1;
 		}
@@ -973,7 +1043,9 @@ class DBMCached implements DatabaseManager
 			try {
 				$result = $this->databaseManager->start();
 			}
-			catch (PDOException $e) {
+			catch (PDOException $e)
+			{
+				$this->setLastError($e);
 				$this->dbg->log2($e->getMessage(), ['debug' => $debug]);
 			}
 		}
@@ -998,6 +1070,8 @@ class DBMCached implements DatabaseManager
 	 */
 	function rollback(bool $debug = false): bool
 	{
+		$this->resetLastError();
+
 		if ($this->transactionLevel < 1) {
 			return false;
 		}
@@ -1012,7 +1086,9 @@ class DBMCached implements DatabaseManager
 			try {
 				$result = $this->databaseManager->rollback();
 			}
-			catch (PDOException $e) {
+			catch (PDOException $e)
+			{
+				$this->setLastError($e);
 				$this->dbg->log2($e->getMessage(), ['debug' => $debug]);
 			}
 		}
@@ -1037,6 +1113,8 @@ class DBMCached implements DatabaseManager
 	 */
 	function commit(bool $debug = false): bool
 	{
+		$this->resetLastError();
+
 		if ($this->transactionLevel < 1) {
 			return false;
 		}
@@ -1051,7 +1129,9 @@ class DBMCached implements DatabaseManager
 			try {
 				$result = $this->databaseManager->commit();
 			}
-			catch (PDOException $e) {
+			catch (PDOException $e)
+			{
+				$this->setLastError($e);
 				$this->dbg->log2($e->getMessage(), ['debug' => $debug]);
 			}
 		}
