@@ -14,7 +14,7 @@ namespace XrTools;
 class DBExt
 {
 	/**
-	 * @var DatabaseManager
+	 * @var DBMCached
 	 */
 	protected $db;
 	/**
@@ -36,13 +36,13 @@ class DBExt
 
 	/**
 	 * DBExt constructor.
-	 * @param DatabaseManager $db
+	 * @param DBMCached $db
 	 * @param MemcachedAdapter $mc
 	 * @param Utils $utils
 	 * @param array $opt
 	 */
 	function __construct(
-		DatabaseManager $db,
+		DBMCached $db,
 		MemcachedAdapter $mc,
 		Utils $utils,
 		array $opt = []
@@ -57,9 +57,9 @@ class DBExt
 	}
 
 	/**
-	 * @return DatabaseManager
+	 * @return DBMCached
 	 */
-	function db(): DatabaseManager
+	function db(): DBMCached
 	{
 		return $this->db;
 	}
