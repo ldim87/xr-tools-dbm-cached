@@ -14,7 +14,7 @@ namespace XrTools;
 class DBExt
 {
 	/**
-	 * @var DatabaseManager
+	 * @var DBMCached
 	 */
 	protected $db;
 	/**
@@ -36,13 +36,13 @@ class DBExt
 
 	/**
 	 * DBExt constructor.
-	 * @param DatabaseManager $db
+	 * @param DBMCached $db
 	 * @param MemcachedAdapter $mc
 	 * @param Utils $utils
 	 * @param array $opt
 	 */
 	function __construct(
-		DatabaseManager $db,
+		DBMCached $db,
 		MemcachedAdapter $mc,
 		Utils $utils,
 		array $opt = []
@@ -57,9 +57,9 @@ class DBExt
 	}
 
 	/**
-	 * @return DatabaseManager
+	 * @return DBMCached
 	 */
-	function db(): DatabaseManager
+	function db(): DBMCached
 	{
 		return $this->db;
 	}
@@ -197,6 +197,30 @@ class DBExt
 		$debug = ! empty($opt['debug']);
 
 		return $this->db->commit($debug);
+	}
+
+	/**
+	 * @return array
+	 */
+	function getLastQueryFetch(): array
+	{
+		return $this->db->getLastQueryFetch();
+	}
+
+	/**
+	 * @return string
+	 */
+	function getLastError(): string
+	{
+		return $this->db->getLastError();
+	}
+
+	/**
+	 * @return string
+	 */
+	function getLastErrorCode(): string
+	{
+		return $this->db->getLastErrorCode();
 	}
 
 	/////////////////////////////////
@@ -489,7 +513,7 @@ class DBExt
 	 */
 	function insertList(string $table, array $setList, array $opt = [])
 	{
-		if (empty($setList) || ! is_array($setList)) {
+		if (! $table || ! $setList) {
 			$this->err('No data to write');
 			return false;
 		}
@@ -531,7 +555,7 @@ class DBExt
 				$this->opt($opt)
 			);
 
-			if (! $res) {
+			if (empty($res['status'])) {
 				break;
 			}
 		}
