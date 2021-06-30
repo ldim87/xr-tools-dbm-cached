@@ -432,10 +432,10 @@ class DBExt
 	}
 
 	/**
-	 * @param string $table
-	 * @param int $id
-	 * @param array $set
-	 * @param array $opt
+	 * @param string $table  Редактируемая таблица
+	 * @param int $id        Id строки
+	 * @param array $set     Колонки с данными для обновления
+	 * @param array $opt     Опции
 	 * @return bool
 	 */
 	function updateById(string $table, int $id, array $set, array $opt = [])
@@ -803,7 +803,7 @@ class DBExt
 	 */
 	function escapeNameAndAlias(string $val): string
 	{
-		preg_match('~^([a-z0-9_-]+)\(([a-z0-9_-]+)\)~i', $val, $preg);
+		preg_match('~^([a-z0-9._-]+)\(([a-z0-9_-]+)\)~i', $val, $preg);
 
 		if (! $preg) {
 			return $this->escapeName($val);
@@ -830,14 +830,25 @@ class DBExt
 	 *    -fields = [
 	 *      'title', 'COUNT(`id`)', 'SUM(`num`) AS `sum_num`',
 	 *    ]
+	 *    -columns = [
+	 *      'id', 'type'
+	 *    ]
 	 * @return string
 	 */
 	function fields(array $opt): string
 	{
-		$fields = $opt['fields'] ?? [];
 		$default = '*';
+		$fields = $opt['fields'] ?? [];
+		$columns = $opt['columns'] ?? [];
 
-		if (empty($fields) || ! is_array($fields)) {
+		if ($columns && is_array($columns))
+		{
+			foreach ($columns as $column) {
+				$fields []= $this->escapeNameAndAlias($column);
+			}
+		}
+
+		if (! $fields || ! is_array($fields)) {
 			return $default;
 		}
 
