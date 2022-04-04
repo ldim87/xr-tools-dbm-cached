@@ -85,7 +85,7 @@ class DBExt
 	 * @param array $opt
 	 * @return bool
 	 */
-	function exec(string $query, array $params = null, array $opt = [])
+	function exec(string $query, array $params = null, array $opt = []): bool
 	{
 		$res = $this->db->query($query, $params, $this->opt($opt));
 
@@ -916,8 +916,8 @@ class DBExt
 	 */
 	function limitOffset(array $opt): string
 	{
-		$limit = (int) ($opt['limit'] ?? 0);
-		$offset = (int) ($opt['offset'] ?? 0);
+		$limit = intval($opt['limit'] ?? 0);
+		$offset = intval($opt['offset'] ?? 0);
 
 		if (empty($limit)) {
 			return '';
@@ -1124,7 +1124,7 @@ class DBExt
 	{
 		if (is_array($source))
 		{
-			if (empty($source['from']) || empty($source['fields']) || empty($source['main_table'])) {
+			if (empty($source['from']) || empty($source['main_table'])) {
 				return false;
 			}
 
