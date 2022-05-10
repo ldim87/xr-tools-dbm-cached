@@ -384,6 +384,10 @@ class DBMCached implements DatabaseManager
 				
 				// adding missing keys to the query (that's why query MUST must end with "WHERE")
 				$query .= ' ' . $query_column . ' IN (' . implode(',', array_fill(1, count($params), '?')) . ')';
+				
+				if(!empty($opt['cache_prefix_add_query'])){
+					$query .= ' ' .$opt['cache_prefix_add_query'];
+				}
 			}
 			
 			// 
@@ -503,8 +507,12 @@ class DBMCached implements DatabaseManager
 					// get cache key
 					$mc_key = $mc_keys[ $val ];
 					
+					// keep empty entries in cache
+					if (! isset($db_data[ $val ]) ) {
+						$db_data[ $val ] = [];
+					}
 					// skip invalid items
-					if (! isset($db_data[ $val ]) || $db_data[ $val ] === false) {
+					elseif($db_data[ $val ] === false){
 						continue;
 					}
 
