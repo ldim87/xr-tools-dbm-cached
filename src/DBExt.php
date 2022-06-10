@@ -1124,7 +1124,7 @@ class DBExt
 	{
 		if (is_array($source))
 		{
-			if (empty($source['from']) || empty($source['main_table'])) {
+			if (empty($source['from']) || empty($source['main_table']) || ! isset($source['fields'])) {
 				return false;
 			}
 
