@@ -106,6 +106,7 @@ class DBExt
 	function fetchArray(string $query, array $params = null, array $opt = [])
 	{
 		$opt = $this->cacheOpt($query, $params, $this->opt($opt));
+
 		return $this->db->fetchArray($query, $params, $opt);
 	}
 
@@ -118,6 +119,7 @@ class DBExt
 	function fetchRow(string $query, array $params = null, array $opt = [])
 	{
 		$opt = $this->cacheOpt($query, $params, $this->opt($opt));
+
 		return $this->db->fetchRow($query, $params, $opt);
 	}
 
@@ -130,6 +132,7 @@ class DBExt
 	function fetchColumn(string $query, array $params = null, array $opt = [])
 	{
 		$opt = $this->cacheOpt($query, $params, $this->opt($opt));
+
 		return $this->db->fetchColumn($query, $params, $opt);
 	}
 
@@ -152,6 +155,7 @@ class DBExt
 	function fetchArrayWithCount(string $query, array $params = null, array $opt = [])
 	{
 		$opt = $this->cacheOpt($query, $params, $this->opt($opt));
+
 		return $this->db->fetchArrayWithCount($query, $params, $opt);
 	}
 
@@ -1211,10 +1215,23 @@ class DBExt
 			// Добавляем версию
 			if ($versions)
 			{
-				$versions = $this->utils->arrays()->words((array) $versions);
+				$versions = (array) $versions;
 
-				foreach ($versions as $version) {
-					$key .= '_'.$this->mc->getStamp($version, 3600 * 30);
+				sort($versions);
+
+				$list = [];
+
+				foreach ($versions as $version)
+				{
+					if (empty($version)) {
+						continue;
+					}
+
+					$list []= $this->mc->getStamp($version, 3600 * 30);
+				}
+
+				if ($list) {
+					$key .= '_'.implode(':', $list);
 				}
 			}
 		}
