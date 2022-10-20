@@ -33,6 +33,10 @@ class DBExt
 	 * @var string
 	 */
 	protected $columnQuote = '`';
+	/**
+	 * @var array
+	 */
+	protected $opt = [];
 
 	/**
 	 * DBExt constructor.
@@ -50,6 +54,7 @@ class DBExt
 		$this->db = $db;
 		$this->mc = $mc;
 		$this->utils = $utils;
+		$this->opt = $opt;
 
 		if (isset($opt['debug'])) {
 			$this->debug = ! empty($opt['debug']);
@@ -402,7 +407,9 @@ class DBExt
 
 		array_push($params, ...$params2);
 
-		return $this->exec(
+		$opt = $this->opt($opt);
+
+		$res = $this->exec(
 			'UPDATE
 			  '.$this->escapeName($table).'
 			SET
@@ -410,8 +417,14 @@ class DBExt
 			'.($where ? 'WHERE ' . $where : '').'
 			'.$this->limitOffset($opt),
 			$params,
-			$this->opt($opt)
+			$opt
 		);
+
+		if ($res) {
+			$this->cacheDeleteOpt($opt);
+		}
+
+		return $res;
 	}
 
 	/**
@@ -461,14 +474,22 @@ class DBExt
 			return false;
 		}
 
-		return $this->exec(
+		$opt = $this->opt($opt);
+
+		$res = $this->exec(
 			'DELETE FROM
 			  '.$this->escapeName($table).'
 			'.($where ? 'WHERE ' . $where : '').'
 			'.$this->limitOffset($opt),
 			$params,
-			$this->opt($opt)
+			$opt
 		);
+
+		if ($res) {
+			$this->cacheDeleteOpt($opt);
+		}
+
+		return $opt;
 	}
 
 	/**
@@ -521,7 +542,12 @@ class DBExt
 		$useChunk = ! empty($opt['chunkSize']);
 		$chunkSize = $opt['chunkSize'] ?? 10000000;
 
-		$row = $setList[0] ?? [];
+		$row = current($setList);
+
+		if (! $row) {
+			return false;
+		}
+
 		$insertColumns = (array) ($opt['columns'] ?? []);
 
 		if (empty($insertColumns)) {
@@ -582,6 +608,8 @@ class DBExt
 				return false;
 			}
 		}
+
+		$this->cacheDeleteOpt($opt);
 
 		// Если нужен insert id
 		if (! empty($opt['insertID']) && ! empty($res['insert_id'])) {
@@ -912,6 +940,7 @@ class DBExt
 	 * @param array $opt
 	 *    -limit = 10
 	 *    -offset = 20
+	 *    -page = 1
 	 * @return string
 	 */
 	function limitOffset(array $opt): string
@@ -921,6 +950,11 @@ class DBExt
 
 		if (empty($limit)) {
 			return '';
+		}
+
+		if (isset($opt['page'])) {
+			$page = intval($opt['page'] ?? 1);
+			$offset = ($page - 1) * $limit;
 		}
 
 		return 'LIMIT ' . ($offset ? $offset . ', ' : '') . $limit;
@@ -1161,7 +1195,7 @@ class DBExt
 		}
 
 		$key = $cache['key'] ?? null;
-		$version = $cache['version'] ?? null;
+		$versions = $cache['versions'] ?? $cache['version'] ?? null;
 
 		// Если нет ключа, создаём
 		if (! $key)
@@ -1175,8 +1209,13 @@ class DBExt
 			$key = sha1($draft);
 
 			// Добавляем версию
-			if ($version) {
-				$key .= '_'.$this->mc->getStamp($version, 3600 * 30);
+			if ($versions)
+			{
+				$versions = $this->utils->arrays()->words((array) $versions);
+
+				foreach ($versions as $version) {
+					$key .= '_'.$this->mc->getStamp($version, 3600 * 30);
+				}
 			}
 		}
 
@@ -1185,6 +1224,23 @@ class DBExt
 		$opt['cache_time'] = $cache['sec'] ?? 1200;
 
 		return $opt;
+	}
+
+	/**
+	 * @param array $opt
+	 * @return void
+	 */
+	protected function cacheDeleteOpt(array $opt): void
+	{
+		$keys = $opt['cache_delete'] ?? [];
+
+		if (empty($keys)) {
+			return;
+		}
+
+		$keys = (array) $keys;
+
+		$this->mc->del($keys);
 	}
 
 	/**
@@ -1204,6 +1260,11 @@ class DBExt
 	protected function opt(array $opt = [], array $opt2 = []): array
 	{
 		$opt['debug'] = $this->debug || ! empty($opt['debug']);
+
+		// Функция обратного вызова для определения доступности дебага
+		if (! $opt['debug'] && ! empty($this->opt['debugMiddleware']) && is_callable($this->opt['debugMiddleware'])) {
+			$opt['debug'] = $this->opt['debugMiddleware']();
+		}
 
 		return array_merge($opt, $opt2);
 	}
