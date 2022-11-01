@@ -493,7 +493,7 @@ class DBExt
 			$this->cacheDeleteOpt($opt);
 		}
 
-		return $opt;
+		return $res;
 	}
 
 	/**
@@ -1200,6 +1200,16 @@ class DBExt
 
 		$key = $cache['key'] ?? null;
 		$versions = $cache['versions'] ?? $cache['version'] ?? null;
+		$exp = $cache['exp'] ?? $cache['sec'] ?? 1200;
+
+		if ($versions)
+		{
+			if (! is_array($versions)) {
+				$versions = (array) $versions;
+			}
+
+			sort($versions);
+		}
 
 		// Если нет ключа, создаём
 		if (! $key)
@@ -1215,10 +1225,6 @@ class DBExt
 			// Добавляем версию
 			if ($versions)
 			{
-				$versions = (array) $versions;
-
-				sort($versions);
-
 				$list = [];
 
 				foreach ($versions as $version)
@@ -1238,7 +1244,7 @@ class DBExt
 
 		$opt['cache'] = $cache['use'] ?? true;
 		$opt['cache_key'] = $key;
-		$opt['cache_time'] = $cache['sec'] ?? 1200;
+		$opt['cache_time'] = $exp;
 
 		return $opt;
 	}
