@@ -54,6 +54,14 @@ class Transaction
 	/**
 	 * @return bool
 	 */
+	function check(): bool
+	{
+		return $this->start;
+	}
+
+	/**
+	 * @return bool
+	 */
 	function is(): bool
 	{
 		return $this->start;
