@@ -341,7 +341,7 @@ class DBMCached implements DatabaseManager
 						if ($debug)
 						{
 							$this->dbg->log(
-								'Cached results found. Skipping query...',
+								'Cached results found. Skipping query... ['.implode(', ', array_values($mc_keys)).']',
 								__METHOD__
 							);
 						}
