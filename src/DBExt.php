@@ -160,6 +160,23 @@ class DBExt
 	}
 
 	/**
+	 * @param string $query
+	 * @param array|null $params
+	 * @param array $opt
+	 * @return mixed
+	 */
+	function fetchCount(string $query, array $params = null, array $opt = [])
+	{
+		$opt = $this->cacheOpt($query, $params, $this->opt($opt));
+
+		return $this->fetchColumn(
+			$this->db()->getExtractCountSQL($query),
+			$params,
+			$opt
+		);
+	}
+
+	/**
 	 * @param array $opt
 	 * @return Transaction
 	 */

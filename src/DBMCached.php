@@ -1033,6 +1033,15 @@ class DBMCached implements DatabaseManager
 	}
 
 	/**
+	 * @param string $query
+	 * @return string
+	 */
+	function getExtractCountSQL(string $query): string
+	{
+		return $this->databaseManager->getExtractCountSQL($query);
+	}
+
+	/**
 	 * @param bool $debug
 	 * @return bool
 	 */
