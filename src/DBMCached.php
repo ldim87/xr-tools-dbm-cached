@@ -877,7 +877,7 @@ class DBMCached implements DatabaseManager
 		foreach ($arr as $item)
 		{
 			if (! isset($item[ $by_key ])) {
-				return $arr;
+				continue;
 			}
 
 			$result[ $item[ $by_key] ] = $item;
