@@ -549,82 +549,6 @@ class DBMCached implements DatabaseManager
 	}
 
 	/**
-	 * Getting data and the number of all rows
-	 * ps. DISTINCT() not yet provided
-	 * @param string $query
-	 * @param array|null $params
-	 * @param array $opt
-	 * @return mixed
-	 */
-	public function fetchArrayWithCount(string $query, array $params = null, array $opt = [])
-	{
-		$this->resetLastError();
-
-		$cache = ! empty($opt['cache']) && ! empty($opt['cache_key']);
-		$debug = ! empty($opt['debug']);
-
-		if ($debug) {
-			$this->dbg->log($this->getQueryDebugInfo($query, $params), __METHOD__);
-		}
-
-		if (! $query) {
-			return false;
-		}
-		
-		// get cache
-		if ($cache)
-		{
-			$result = $this->cacheManager->get($opt['cache_key'], true);
-
-			if ($result !== false)
-			{
-				if ($debug)
-				{
-					$this->dbg->log(
-						'Cached result found via key "' . $opt['cache_key'] . '". Skipping query...' . "\n",
-						__METHOD__
-					);
-				}
-
-				return $result;
-			}
-		}
-		
-		try {
-			// log query
-			$this->collectQuery($query, $params);
-
-			$result = $this->databaseManager->fetchArrayWithCount($query, $params);
-		}
-		catch(PDOException $e)
-		{
-			$this->setLastError($e);
-
-			if ($debug) {
-				$this->dbg->log($e->getMessage(), __METHOD__);
-			}
-			
-			return false;
-		}
-
-		// set cache
-		if ($cache)
-		{
-			if ($debug)
-			{
-				$this->dbg->log(
-					'Saving cache via key "' . $opt['cache_key'] . '"'. "\nValue:\n" . '<pre>'.print_r($result, true).'</pre>',
-					__METHOD__
-				);
-			}
-
-			$this->cacheManager->set($opt['cache_key'], $result, $opt['cache_time'] ?? null, true);
-		}
-		
-		return $result;
-	}
-
-	/**
 	 * @param string $query
 	 * @param array|null $params
 	 * @param array $opt
@@ -793,11 +717,12 @@ class DBMCached implements DatabaseManager
 	}
 
 	/**
+	 * ps. DISTINCT() not yet provided
 	 * @param bool $inheritCache
 	 * @param array $opt
 	 * @return mixed
 	 */
-	function getCalcFoundRows(bool $inheritCache = true, array $opt = [])
+	function getCalcFoundRows(bool $inheritCache = true, array $opt = []): mixed
 	{
 		$debug = ! empty($opt['debug']);
 
@@ -822,10 +747,29 @@ class DBMCached implements DatabaseManager
 		}
 
 		return $this->fetchColumn(
-			$this->databaseManager->getExtractCountSQL($this->lastQueryFetch['sql']),
+			$this->getExtractCountSQL($this->lastQueryFetch['sql']),
 			$this->lastQueryFetch['params'],
 			$opt
 		);
+	}
+
+	/**
+	 * Getting data and the number of all rows
+	 * ps. DISTINCT() not yet provided
+	 * @param string $query
+	 * @param array|null $params
+	 * @param array $opt
+	 * @return array
+	 */
+	function fetchArrayWithCount(string $query, array $params = null, array $opt = []): array
+	{
+		$items = $this->fetchArray($query, $params, $opt);
+		$count = $this->getCalcFoundRows(true, $opt);
+
+		return [
+			'count' => $count,
+			'items' => $items,
+		];
 	}
 
 	/**
@@ -1022,26 +966,6 @@ class DBMCached implements DatabaseManager
 	}
 
 	/**
-	 * Создание части sql запроса из массива
-	 * @param array $data
-	 * @param string $glue
-	 * @return array
-	 */
-	public function genPartSQL(array $data = [], string $glue = ', '): array
-	{
-		return $this->databaseManager->genPartSQL($data, $glue);
-	}
-
-	/**
-	 * @param string $query
-	 * @return string
-	 */
-	function getExtractCountSQL(string $query): string
-	{
-		return $this->databaseManager->getExtractCountSQL($query);
-	}
-
-	/**
 	 * @param bool $debug
 	 * @return bool
 	 */
@@ -1165,6 +1089,105 @@ class DBMCached implements DatabaseManager
 		$this->transactionLevel = $level;
 
 		return true;
+	}
+
+	/**
+	 * Создание части sql запроса из массива
+	 * @param array $data
+	 * @param string $glue
+	 * @return array
+	 */
+	function genPartSQL(array $data = [], string $glue = ', '): array
+	{
+		$part_sql = [];
+		$param = [];
+
+		foreach ($data as $key => $value)
+		{
+			if (is_null($value)) {
+				$part_sql []= '`'.$key.'` = NULL';
+			}
+			else {
+				$part_sql []= '`'.$key.'` = ?';
+				$param []= $value;
+			}
+		}
+
+		return [
+			implode($glue, $part_sql),
+			$param
+		];
+	}
+
+	/**
+	 * ps. DISTINCT() not yet provided
+	 * @param $mainQuery
+	 * @return string
+	 */
+	function getExtractCountSQL($mainQuery): string
+	{
+		// Remove secondary requests for a while if there are any
+		[$query, $attach] = $this->getCountSQLNested($mainQuery);
+
+		// Remove from query "order by" and "limit"
+		$query = trim(
+			preg_replace('/(ORDER BY|LIMIT).*$/is', '', $query)
+		);
+
+		// Find out if data is being grouped
+		preg_match('/(GROUP BY)/is', $query, $preg_gb);
+
+		// Depending on the type of getting the number of rows, we get it
+		if (empty($preg_gb)) {
+			$query = preg_replace('/SELECT.*FROM/is', 'SELECT COUNT(*) FROM', $query);
+		} else {
+			// $query = preg_replace('/SELECT.*FROM/is', 'SELECT * FROM', $query);
+			$query = 'SELECT COUNT(*) FROM (' . $query . ') AS `tmp_count`';
+		}
+
+		// Returning secondary requests to the site
+		return $this->setCountSQLNested($query, $attach);
+	}
+
+	/**
+	 * @param $query
+	 * @return array
+	 */
+	protected function getCountSQLNested($query): array
+	{
+		$attach = [];
+		$i = 1;
+
+		$query = preg_replace_callback(
+			'/\((.*?)\)/is',
+			function($matches) use (&$attach, &$i){
+				$key          = '#prc' . $i++ . '#';
+				$attach[$key] = $matches[1];
+
+				return '(' . $key . ')';
+			},
+			$query
+		);
+
+		return [$query, $attach];
+	}
+
+	/**
+	 * @param string $query
+	 * @param array $attach
+	 * @return string
+	 */
+	protected function setCountSQLNested(string $query, array $attach): string
+	{
+		if (empty($attach)) {
+			return $query;
+		}
+
+		return str_replace(
+			array_keys($attach),
+			array_values($attach),
+			$query
+		);
 	}
 }
 
