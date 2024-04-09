@@ -141,7 +141,7 @@ class DBExt
 	 * @param array $opt
 	 * @return mixed
 	 */
-	function getCalcFoundRows(bool $inheritCache = true, array $opt = [])
+	function getCalcFoundRows(bool $inheritCache = true, array $opt = []): mixed
 	{
 		return $this->db->getCalcFoundRows($inheritCache, $this->opt($opt));
 	}
@@ -150,9 +150,9 @@ class DBExt
 	 * @param string $query
 	 * @param array|null $params
 	 * @param array $opt
-	 * @return mixed
+	 * @return array
 	 */
-	function fetchArrayWithCount(string $query, array $params = null, array $opt = [])
+	function fetchArrayWithCount(string $query, array $params = null, array $opt = []): array
 	{
 		$opt = $this->cacheOpt($query, $params, $this->opt($opt));
 
@@ -165,7 +165,7 @@ class DBExt
 	 * @param array $opt
 	 * @return mixed
 	 */
-	function fetchCount(string $query, array $params = null, array $opt = [])
+	function fetchCount(string $query, array $params = null, array $opt = []): mixed
 	{
 		$opt = $this->cacheOpt($query, $params, $this->opt($opt));
 
