@@ -1080,6 +1080,9 @@ class DBExt
 
 		foreach ($data as $key => $value)
 		{
+			// Если есть больше условий на одну колонку
+			$key = preg_replace('~/\d+$~', '', $key);
+
 			$column = $this->escapeName($key);
 
 			if (is_null($value))
