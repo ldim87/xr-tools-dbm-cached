@@ -122,7 +122,7 @@ class DBMCached implements DatabaseManager
 	 * @param array $opt
 	 * @return bool
 	 */
-	protected function exec(string $query, array $params = null, array $opt = [])
+	protected function exec(string $query, ?array $params = null, array $opt = [])
 	{
 		$res = $this->query($query, $params, $opt);
 
@@ -138,7 +138,7 @@ class DBMCached implements DatabaseManager
 	 *
 	 * @return null|array|mixed [description]
 	 */
-	public function query(string $query, array $params = null, array $opt = [])
+	public function query(string $query, ?array $params = null, array $opt = [])
 	{
 		$this->resetLastError();
 
@@ -211,7 +211,7 @@ class DBMCached implements DatabaseManager
 	 * @param string     $query  [description]
 	 * @param array|null $params [description]
 	 */
-	protected function collectQuery(string $query, array $params = null)
+	protected function collectQuery(string $query, ?array $params = null)
 	{
 		// don't collect
 		if (! $this->isCollectingQueries){
@@ -241,7 +241,7 @@ class DBMCached implements DatabaseManager
 	 * @param  array|null $params [description]
 	 * @return [type]             [description]
 	 */
-	protected function getQueryDebugInfo(string $query, array $params = null)
+	protected function getQueryDebugInfo(string $query, ?array $params = null)
 	{
 		// set message info
 		$message = "Query:<br><br>\n\n<span class='query-sql'>{$query}</span>";
@@ -259,7 +259,7 @@ class DBMCached implements DatabaseManager
 	 * @param array $opt
 	 * @return array|false
 	 */
-	public function fetchArray(string $query, array $params = null, array $opt = [])
+	public function fetchArray(string $query, ?array $params = null, array $opt = [])
 	{
 		$this->resetLastError();
 		$this->setLastQueryFetch($query, $params, $opt);
@@ -554,7 +554,7 @@ class DBMCached implements DatabaseManager
 	 * @param array $opt
 	 * @return mixed
 	 */
-	public function fetchColumn(string $query, array $params = null, array $opt = [])
+	public function fetchColumn(string $query, ?array $params = null, array $opt = [])
 	{
 		$this->resetLastError();
 		$this->setLastQueryFetch($query, $params, $opt);
@@ -639,7 +639,7 @@ class DBMCached implements DatabaseManager
 	 * @param array $opt
 	 * @return mixed
 	 */
-	public function fetchRow(string $query, array $params = null, array $opt = [])
+	public function fetchRow(string $query, ?array $params = null, array $opt = [])
 	{
 		$this->resetLastError();
 		$this->setLastQueryFetch($query, $params, $opt);
@@ -761,7 +761,7 @@ class DBMCached implements DatabaseManager
 	 * @param array $opt
 	 * @return array
 	 */
-	function fetchArrayWithCount(string $query, array $params = null, array $opt = []): array
+	function fetchArrayWithCount(string $query, ?array $params = null, array $opt = []): array
 	{
 		$items = $this->fetchArray($query, $params, $opt);
 		$count = $this->getCalcFoundRows(true, $opt);
@@ -777,7 +777,7 @@ class DBMCached implements DatabaseManager
 	 * @param array|null $params
 	 * @param array $opt
 	 */
-	protected function setLastQueryFetch(string $sql, array $params = null, array $opt = [])
+	protected function setLastQueryFetch(string $sql, ?array $params = null, array $opt = [])
 	{
 		$this->lastQueryFetch = [
 			'sql'    => $sql,

@@ -79,7 +79,7 @@ class DBExt
 	 * @param array $opt
 	 * @return mixed
 	 */
-	function query(string $query, array $params = null, array $opt = [])
+	function query(string $query, ?array $params = null, array $opt = [])
 	{
 		return $this->db->query($query, $params, $this->opt($opt));
 	}
@@ -90,7 +90,7 @@ class DBExt
 	 * @param array $opt
 	 * @return bool
 	 */
-	function exec(string $query, array $params = null, array $opt = []): bool
+	function exec(string $query, ?array $params = null, array $opt = []): bool
 	{
 		$res = $this->db->query($query, $params, $this->opt($opt));
 
@@ -103,7 +103,7 @@ class DBExt
 	 * @param array $opt
 	 * @return mixed
 	 */
-	function fetchArray(string $query, array $params = null, array $opt = [])
+	function fetchArray(string $query, ?array $params = null, array $opt = [])
 	{
 		$opt = $this->cacheOpt($query, $params, $this->opt($opt));
 
@@ -116,7 +116,7 @@ class DBExt
 	 * @param array $opt
 	 * @return mixed
 	 */
-	function fetchRow(string $query, array $params = null, array $opt = [])
+	function fetchRow(string $query, ?array $params = null, array $opt = [])
 	{
 		$opt = $this->cacheOpt($query, $params, $this->opt($opt));
 
@@ -129,7 +129,7 @@ class DBExt
 	 * @param array $opt
 	 * @return mixed
 	 */
-	function fetchColumn(string $query, array $params = null, array $opt = [])
+	function fetchColumn(string $query, ?array $params = null, array $opt = [])
 	{
 		$opt = $this->cacheOpt($query, $params, $this->opt($opt));
 
@@ -152,7 +152,7 @@ class DBExt
 	 * @param array $opt
 	 * @return array
 	 */
-	function fetchArrayWithCount(string $query, array $params = null, array $opt = []): array
+	function fetchArrayWithCount(string $query, ?array $params = null, array $opt = []): array
 	{
 		$opt = $this->cacheOpt($query, $params, $this->opt($opt));
 
@@ -165,7 +165,7 @@ class DBExt
 	 * @param array $opt
 	 * @return mixed
 	 */
-	function fetchCount(string $query, array $params = null, array $opt = []): mixed
+	function fetchCount(string $query, ?array $params = null, array $opt = []): mixed
 	{
 		$opt = $this->cacheOpt($query, $params, $this->opt($opt));
 
@@ -259,7 +259,7 @@ class DBExt
 	 * @param array $opt
 	 * @return mixed
 	 */
-	function getWhereAnd( $source, array $whereAnd = null, array $opt = [])
+	function getWhereAnd( $source, ?array $whereAnd = null, array $opt = [])
 	{
 		// Для использования $this->source()
 		[$tableFrom, $opt] = $this->sourceWorkingInGetWhereAnd($source, $opt);
@@ -1210,7 +1210,7 @@ class DBExt
 	 * @param array $opt
 	 * @return array
 	 */
-	protected function cacheOpt(string $sql, array $params = null, array $opt = []): array
+	protected function cacheOpt(string $sql, ?array $params = null, array $opt = []): array
 	{
 		$cache = $opt['cache'] ?? [];
 
