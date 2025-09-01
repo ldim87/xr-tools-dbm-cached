@@ -1101,7 +1101,7 @@ class DBExt
 				$way = array_shift($value);
 
 				// Если идёт вставка чистого sql
-				if (is_int($key))
+				if (is_numeric($key))
 				{
 					$partSql []= $way;
 				}
