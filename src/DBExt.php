@@ -933,6 +933,13 @@ class DBExt
 			];
 		}
 
+		$allowed = $opt['orderByAllowed'] ?? [];
+
+		if($allowed && ! $this->isOrderByAllowed($order, $allowed)) {
+			$this->err('Order by contains forbidden columns!');
+			return '';
+		}
+
 		$part = [];
 
 		foreach ($order as $column => $desc) {
@@ -1310,6 +1317,23 @@ class DBExt
 		}
 
 		return array_merge($opt, $opt2);
+	}
+
+	private function isOrderByAllowed($order, $allowed){
+		
+		if (! is_array($order)) {
+			$order = [
+				$order => false
+			];
+		}
+
+		foreach ($order as $column => $desc) {
+			if (! in_array($column, $allowed)) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 }
 
