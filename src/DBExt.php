@@ -1284,7 +1284,7 @@ class DBExt
 
 		$key = $cache['key'] ?? null;
 		$versions = $cache['versions'] ?? $cache['version'] ?? null;
-		$exp = $cache['exp'] ?? $cache['sec'] ?? 1200;
+		$exp = $cache['expire'] ?? $cache['exp'] ?? $cache['sec'] ?? 1200;
 
 		if ($versions)
 		{
