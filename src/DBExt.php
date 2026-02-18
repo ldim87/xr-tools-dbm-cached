@@ -688,6 +688,63 @@ class DBExt
 		return $this->insertList($table, $setList, $opt);
 	}
 
+    /**
+     * @param string $insertTable
+     * @param array $set
+     * @param string $selectTable
+     * @param array $whereAnd
+     * @param array $opt
+     * @return bool
+     */
+    function insertSelect(string $insertTable, array $set, string $selectTable, array $whereAnd = [], array $opt = []): bool
+    {
+        $params = [];
+        $fields = [];
+
+        foreach ($set as $item)
+        {
+            if (is_null($item)) {
+                $fields []= 'NULL';
+            } elseif (is_string($item)) {
+                $fields []= $this->escapeName($item);
+            } elseif (is_array($item)) {
+                if ($item[0] == 'int') {
+                    $fields []= '?';
+                    $params []= $item[1];
+                } elseif ($item[0] == 'string') {
+                    $fields []= '?';
+                    $params []= $item[1];
+                }
+            }
+        }
+
+        [$where, $whereParams] = $this->partSQLWhereAnd($whereAnd);
+
+        if (is_null($where)) {
+            return false;
+        }
+
+        array_push($params, ...$whereParams);
+
+        $res = $this->exec(
+            'INSERT INTO 
+              '.$this->escapeName($insertTable).'
+            SELECT 
+              '.implode(', ', $fields).'
+            FROM 
+              '.$this->escapeName($selectTable).'
+			'.($where ? 'WHERE ' . $where : ''),
+            $params,
+            $this->opt($opt)
+        );
+
+        if (! $res) {
+            return false;
+        }
+
+        return true;
+    }
+
 	/////////////////////////////////
 	/// Добавление или Обновление
 	/////////////////////////////////
