@@ -280,14 +280,7 @@ class DBExt
 		}
 
 		return $this->fetchArray(
-			'SELECT
-			  '.$this->fields($opt).'
-			FROM
-			  '.$tableFrom.'
-			'.($where ? 'WHERE ' . $where : '').'
-			'.$this->groupBy($opt).'
-			'.$this->orderBy($opt).'
-			'.$this->limitOffset($opt),
+			$this->getSelectQuery($tableFrom, $where, $opt),
 			$params,
 			$this->opt($opt)
 		);
@@ -317,15 +310,52 @@ class DBExt
 	 */
 	function getRowWhereAnd($source, array $whereAnd, array $opt = [])
 	{
+		// force limit 1
 		$opt['limit'] = 1;
 
-		$res = $this->getWhereAnd($source, $whereAnd, $opt);
+		// Для использования $this->source()
+		[$tableFrom, $opt] = $this->sourceWorkingInGetWhereAnd($source, $opt);
 
-		if (! $res) {
-			return null;
+		if (is_null($tableFrom)) {
+			return false;
 		}
 
-		return $res[0] ?? null;
+		// Что бы можно было юзать null в whereAnd
+		if (is_null($whereAnd)) {
+			$whereAnd = [];
+		}
+
+		[$where, $params] = $this->partSQLWhereAnd($whereAnd);
+
+		if (is_null($where)) {
+			return false;
+		}
+
+		return $this->fetchRow(
+			$this->getSelectQuery($tableFrom, $where, $opt),
+			$params,
+			$this->opt($opt)
+		);
+	}
+
+	/**
+	 * Retrieves the SQL query string based on the provided parameters.
+	 *
+	 * @param string $tableFrom The table to select from
+	 * @param string $where The WHERE clause for the query
+	 * @param array $opt Additional options for the query
+	 * 
+	 * @return string The constructed SQL query string.
+	 */
+	function getSelectQuery(string $tableFrom, string $where = '', array $opt = []): string {
+		return 'SELECT
+			  '.$this->fields($opt).'
+			FROM
+			  '.$tableFrom.'
+			'.($where ? 'WHERE ' . $where : '').'
+			'.$this->groupBy($opt).'
+			'.$this->orderBy($opt).'
+			'.$this->limitOffset($opt);
 	}
 
 	/**
