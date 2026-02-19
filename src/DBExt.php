@@ -626,7 +626,7 @@ class DBExt
 					'.$this->escapeNameArray($insertColumns).'
 				  )
 				VALUES
-				  '.$partSql.'
+				  '.$partSql.' AS new_vals
 				'.$this->indexConflict($opt, $insertColumns),
 				$params,
 				$this->opt($opt)
@@ -1099,7 +1099,7 @@ class DBExt
 
 		$update = array_map(
 			function ($column) {
-				return $this->escapeName($column).' = VALUES('.$this->escapeName($column).')';
+				return $this->escapeName($column).' = new_vals.'.$this->escapeName($column);
 			},
 			$update
 		);
